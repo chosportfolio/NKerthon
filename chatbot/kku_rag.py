@@ -239,16 +239,17 @@ SYSTEM = """너는 건국대학교 글로컬캠퍼스(충주) 학생을 돕는 '
 2. 날짜·기간·장소·금액·전화번호·과목명·학수번호는 자료에 적힌 그대로 옮겨(줄이거나 바꿔 쓰지 마).
 3. 오늘은 {today}야. 공지의 작성일이나 기간을 보고 이미 지난 일정이면 지났다고 분명히 말해.
 4. 문장 끝에 근거 자료 번호를 [1], [2]처럼 하나씩 붙여([1]–[6] 같은 범위 표기 금지). 번호는 그 문장의 내용을
-   실제로 담고 있는 자료에만 붙이고, 답을 찾지 못했을 때 질문과 관련 없는 자료를 근거로 달지 마.
+   실제로 담고 있는 자료에만 붙이고, 답을 찾지 못했을 때는 번호를 아예 붙이지 마('참고로' 덧붙이는 다른 정보에도).
 5. 친근한 존댓말로, 핵심부터 짧게. 필요하면 목록을 써. 이모지는 쓰지 마.
    [직접 작성 자료]는 운영자가 확인해 보충한 정보야. 다른 자료와 내용이 다르면 이것을 우선해.
-   '학사요람'은 입학연도별로 적용돼. 학생 입학연도의 요람을 기준으로 답하고, 어느 학년도 요람 기준인지 밝혀.
+   '학사요람'은 입학연도별로 적용돼. 졸업·교양·전공 이수학점과 교육과정처럼 학번에 따라 달라지는 내용만 학생 입학연도의
+   요람을 기준으로 답하고 어느 학년도 기준인지 밝혀. 성적·학사경고·휴학 같은 공통 학사 규정은 연도를 따지지 말고 자료대로 답해.
    요람에 없는 학과·연도라면 그렇다고 말하고, 학과 사무실이나 학사지원팀(043-840-3253)에 확인하라고 안내해.
 6. 메신저 말풍선처럼 나눠서 답해. 첫 말풍선은 질문에 대한 핵심 답 1~2문장, 다음 말풍선부터 세부 내용(시간표·목록·주의사항·문의처 등)을 주제별로 하나씩.
    말풍선은 최대 {max_bubbles}개, 하나에 300자 이내. 말풍선 사이에는 [[NEXT]] 한 줄만 넣어. 짧은 답이면 말풍선 1개로 충분해.
 7. 답이 학과·학년·입학연도 등에 따라 달라지는데 [학생 정보]에도 질문에도 그 정보가 없으면, 공통으로 해당하는 내용만 짧게 말한 뒤 필요한 정보를 물어봐.
 8. '강의시간표' 자료는 그 학기에 실제로 열리는 강좌 목록이야. 과목의 학점·담당 교수·요일·시간·강의실은 이 자료를 우선해.
-   질문에 학기가 없으면 몇 학년도 몇 학기 기준인지 밝혀. 분반마다 교수·시간·강의실이 다르면 분반별로 나눠 알려줘.
+   질문에 학기가 없으면 몇 학년도 몇 학기 기준인지 밝혀. 이 자료는 그 학기 개설 강좌 전체라서, 여기에 없으면 그 학기엔 없다고 답해도 돼. 분반마다 교수·시간·강의실이 다르면 분반별로 나눠 알려줘.
    목록이 길면 대표 과목 위주로 보여주고, 전체는 앱 '시간표' 탭의 강의 검색에서 볼 수 있다고 안내해.
    '내 시간표' 자료는 학생이 앱에 직접 등록한 수업이야. 오늘·내일 수업 질문은 오늘 요일을 기준으로 이 자료에서 답해.
    등록된 수업이 없으면 '확인이 안 돼요' 대신, 시간표 탭에서 수업을 추가하면 알려줄 수 있다고 안내해.
@@ -320,6 +321,55 @@ def other_dept_yoram(h: dict, dept: str, question: str) -> bool:
     return a not in q and a[:max(3, len(a) - 2)] not in q          # "메카트로닉스 과목"처럼 줄여 불러도 질문에 나온 학과로
 
 
+REFER_WORDS = ["그거", "그건", "그것", "그럼", "그러면", "그중", "그 중", "거기", "그 교수", "그분", "그 과목", "그 수업",
+               "이거", "저거", "이것", "그때", "그쪽", "다른 건", "나머지"]
+
+
+class QueryNormalizer:
+    """학생 말투를 검색용 말로: 줄임말·은어(slang.json) 풀이 + 학교 용어·과목명과 한 글자만 다른 오타 교정.
+    반환: (검색어에 덧붙인 질문, ['학경=학사경고', '보견실→보건실', ...])"""
+
+    JOSA = ("에서", "까지", "부터", "으로", "이랑", "은", "는", "이", "가", "을", "를", "에", "도", "로", "의", "랑", "만", "야", "요")
+
+    def __init__(self, topics: dict, course_names: list, corpus: str = "", path: Path = HERE / "slang.json"):
+        raw = json.loads(path.read_text("utf-8")) if path.exists() else {}
+        self.slang = {kw._compact(k).lower(): v for k, v in raw.items() if not k.startswith("_")}
+        vocab = {kw._compact(w).lower() for name, aliases in topics.items() for w in [name, *aliases]}
+        vocab |= {kw._compact(w).lower() for v in self.slang.values() for w in v.split()}
+        vocab |= {kw._compact(n).lower() for n in course_names}
+        self.vocab = {w for w in vocab if 3 <= len(w) <= 15}
+        self.corpus = corpus                                # 학교 자료에 실제로 나오는 말은 오타로 보지 않음
+        self.topics = topics
+        self.by_len = {}
+        for w in self.vocab:
+            self.by_len.setdefault(len(w), []).append(w)
+
+    def __call__(self, question: str) -> tuple[str, list]:
+        cq = kw._compact(question).lower()
+        extra, notes = [], []
+        for k, v in self.slang.items():
+            if k in cq and not any(kw._compact(w).lower() in cq for w in v.split()):
+                extra.append(v)
+                notes.append(f"{k}={v.split()[0]}")
+        for tok in re.findall(r"[가-힣A-Za-z0-9]+", question):
+            fixed = self._fix(tok.lower())
+            if fixed and fixed not in cq:
+                extra.append(fixed)
+                notes.append(f"{tok}→{fixed}")
+        return (f"{question} {' '.join(extra)}" if extra else question), notes
+
+    def _fix(self, tok: str):
+        """조사를 뗀 말이 사전에도 학교 자료에도 없고, 사전 단어와 같은 길이에 딱 한 글자만 다르면 교정 (보견실→보건실)"""
+        parts = [tok] + [tok[:-len(j)] for j in self.JOSA if tok.endswith(j) and len(tok) - len(j) >= 3]
+        for part in parts:
+            if len(part) < 3 or part in self.vocab or part in self.corpus:
+                return None
+            cands = [w for w in self.by_len.get(len(part), []) if w[0] == part[0] and sum(a != b for a, b in zip(w, part)) == 1]
+            if len(cands) == 1:
+                return cands[0]
+        return None
+
+
 def load_clarify(path: Path = HERE / "clarify.json") -> list:
     return json.loads(path.read_text("utf-8")) if path.exists() else []
 
@@ -359,6 +409,14 @@ class Bot:
         self.retriever = Retriever(Path(data), self.llm)
         self.rules = load_clarify()
         self.courses = kc.CourseCatalog()
+        self.build_normalizer()
+
+    def build_normalizer(self):
+        """줄임말·오타 해석기 — 검색 사전(keywords.json)·최근 과목명·학교 자료 본문으로 만든다 (평가 스크립트도 호출)"""
+        recent = self.courses.semesters[-4:] if self.courses.available else []
+        names = {c["name"] for sem in recent for c in self.courses.courses(sem)}
+        corpus = "".join(kw._compact(c.get("title", "") + c.get("text", "")).lower() for c in getattr(self.retriever, "chunks", []))
+        self.normalize = QueryNormalizer(kw.load_topics(), sorted(names), corpus)
 
     def answer(self, question: str, history: list | None = None, profile: dict | None = None,
                k: int = 6, max_bubbles: int = 4, lang: str = "ko", timetable: list | None = None) -> dict:
@@ -386,10 +444,19 @@ class Bot:
                 return {"bubbles": [rule["ask"]], "answer": rule["ask"], "sources": [], "hits": [],
                         "clarify": rule["name"], "missing": missing}
 
-        if pending or (last_q and len(question) < 25):
-            query = f"{last_q} {question}".strip()
+        norm_q, notes = self.normalize(question)
+        topics = self.normalize.topics
+        own, before = set(kw.query_topics(norm_q, topics)), set(kw.query_topics(last_q, topics))
+        # 앞 질문이 과목 질문이고, 이번엔 새 과목 없이 학점·시간·교수만 물으면 그 과목 이야기 ("서양철학사 강의실 → 몇 학점이야?")
+        prev_course = self.courses.lookup(last_q, slots) if last_q else None
+        course_follow = (prev_course is not None and kc.asks_about_course(question)
+                         and own <= {"성적", "시험"} and self.courses.lookup(norm_q, slots) is None)
+        follow_up = bool(last_q) and len(question) < 25 and (
+            course_follow or any(w in question for w in REFER_WORDS) or not own or own <= before)
+        if pending or follow_up:
+            query = f"{last_q} {norm_q}".strip()
         else:
-            query = question
+            query = norm_q                                  # 새 주제면 앞 질문을 섞지 않음 ("졸업유예 → 학식 주말에도 해?")
         if rule:
             query += " " + " ".join(slots.get(s, "") for s in rule["need"])
         year = int(slots["입학연도"]) if str(slots.get("입학연도", "")).isdigit() else None
@@ -408,8 +475,14 @@ class Bot:
         # 이어지는 질문이라도 이번 질문이 수업 얘기가 아니면 앞 질문의 과목을 다시 붙이지 않음 ('배고파' 등)
         if kc.wants_personal(question):                      # 비어 있어도 "등록된 수업이 없어요"라고 안내하도록
             extra.append(kc.personal_hit(timetable or []))
-        course = self.courses.lookup(question, slots)
-        if course is None and query != question and kc.asks_about_course(question):
+        course = self.courses.lookup(norm_q, slots)
+        if course is None and last_a and re.search(r"교수|선생|쌤", question):
+            # "그 교수님 다른 수업도 해?" → 앞 답변에 나온 교수의 담당 강좌
+            rows = self.courses.courses(self.courses.pick_semester(norm_q)) if self.courses.available else []
+            profs = self.courses._match_professors(kc._c(last_a), rows)
+            if profs:
+                course = self.courses.lookup(" ".join(f"{p} 교수" for p in sorted(profs)) + " " + norm_q, slots)
+        if course is None and query != norm_q and kc.asks_about_course(question):
             course = self.courses.lookup(query, slots)          # "그거 누가 가르쳐?" → 앞 질문의 과목으로
         if course:
             extra.append(course)
@@ -419,6 +492,8 @@ class Bot:
         today = f"{now.year}년 {now.month}월 {now.day}일 ({'월화수목금토일'[now.weekday()]})"
         student = ("[학생 정보] " + ", ".join(f"{k2}: {v}" for k2, v in slots.items()) + "\n\n") if slots else ""
         asked = f"{last_q} → {question}" if pending else question
+        if notes:                                           # 줄임말·오타를 어떻게 이해했는지 AI에게도 알려 줌
+            asked += f"\n(질문 해석: {', '.join(notes)})"
         system = SYSTEM.format(today=today, max_bubbles=max_bubbles)
         if lang in LANG_RULE:
             system += "\n" + LANG_RULE[lang]
@@ -504,7 +579,7 @@ def is_relevant(h: dict, question: str, answer: str) -> bool:
 
 
 # 답이 아닌 문장: "확인이 안 돼요", "안내할 수 없어요", "~에 문의해 주세요" — 여기 붙은 번호는 근거로 치지 않음
-NON_ANSWER = re.compile(r"확인이\s*안|확인되지\s*않|확인할\s*수\s*없|확인이\s*어렵|자료에\s*(?:는\s*)?없|알\s*수\s*없|"
+NON_ANSWER = re.compile(r"확인이\s*안|확인되지\s*않|확인할\s*수\s*없|확인이\s*어렵|자료에\s*(?:는\s*)?(?:\S+\s*){0,2}없|알\s*수\s*없|"
                         r"안내할\s*수\s*없|도와드릴\s*수\s*없|드릴\s*수\s*없|"
                         r"문의해|문의하세요|문의 바|확인해\s*(?:주세요|보세요)|확인하시")
 _SENTENCE = re.compile(r"[^.!?\n]+(?:[.!?]+|$)(?:\s*\[\d+\])*")      # 문장 + 뒤에 붙은 [n]
@@ -518,6 +593,9 @@ def evidence_text(text: str) -> str:
 def make_sources(hits: list, text: str, question: str = "") -> list:
     """답변이 실제 정보를 주는 문장에서 [n]으로 인용했고, 질문과 관련 있는 자료만 출처로.
     인용이 없거나('답할 수 없어요'·'문의해 주세요' 문장에만 번호가 붙은 경우 포함) 출처를 달지 않는다."""
+    first = next(iter(_SENTENCE.finditer(text)), None)
+    if first and NON_ANSWER.search(first.group()):        # 핵심 답이 '모른다'면 근거 카드 없음
+        return []
     evidence = evidence_text(text)
     out = {}
     for n, h in enumerate(hits, 1):

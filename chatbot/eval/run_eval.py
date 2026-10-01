@@ -108,6 +108,7 @@ def make_bot(stage: dict):
     bot.rules = rag.load_clarify()
     # 강의시간표 연동 전 단계는 빈 폴더를 넘겨 시간표 검색을 끔
     bot.courses = kc.CourseCatalog() if stage.get("courses") else kc.CourseCatalog(ROOT / "_no_catalog")
+    bot.build_normalizer()
     if not stage["fixed"]:
         bot.rules = [{k: v for k, v in r.items() if k != "except"} for r in bot.rules]
     return bot
