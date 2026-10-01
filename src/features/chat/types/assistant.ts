@@ -15,6 +15,14 @@ export type ChatTurn = {
   content: string
 }
 
+/** 챗봇에 같이 보내는 '내 시간표' 수업 한 개 */
+export type TimetableCourse = {
+  name: string
+  credits: number
+  professor: string
+  meetings: Array<{ day: string; startTime: string; endTime: string; room: string }>
+}
+
 export type ChatResponse = {
   bubbles: string[]
   sources: ChatSource[]

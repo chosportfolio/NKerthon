@@ -5,12 +5,18 @@ import type {
   ChatTurn,
   FeedbackRating,
   FeedbackReason,
+  TimetableCourse,
 } from '../types/assistant'
 
 /** 챗봇 서버가 꺼져 있을 때 — 화면은 키워드 메뉴 안내로 대체한다 */
 export class ChatbotUnavailableError extends Error {}
 
-export async function askChatbot(question: string, history: ChatTurn[], language: ChatLanguage) {
+export async function askChatbot(
+  question: string,
+  history: ChatTurn[],
+  language: ChatLanguage,
+  timetable: TimetableCourse[] = [],
+) {
   const token = getSavedAuthToken()
   if (!token) throw new Error('로그인이 필요합니다.')
 
@@ -22,7 +28,7 @@ export async function askChatbot(question: string, history: ChatTurn[], language
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ question, history: history.slice(-6), language }),
+      body: JSON.stringify({ question, history: history.slice(-6), language, timetable }),
     })
   } catch {
     throw new ChatbotUnavailableError('서버에 연결할 수 없습니다.')

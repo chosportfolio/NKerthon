@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import kuCharacter from '../../../assets/ku_character.png'
 import { getSuggestions } from '../constants/suggestions'
 import { useAssistantChat } from '../hooks/useAssistantChat'
+import { getMyTimetable } from '../utils/myTimetable'
 import '../assistant.css'
 import { NewChatGlyph, SuggestionGlyph } from './AssistantIcons'
 import ChatComposer from './ChatComposer'
@@ -9,13 +10,15 @@ import ChatThread from './ChatThread'
 
 type AssistantSectionProps = {
   initialPrompt: string | null
+  userId: number
   userName?: string
   department?: string
   studentNumber?: string
 }
 
-function AssistantSection({ initialPrompt, userName = '', department = '', studentNumber = '' }: AssistantSectionProps) {
-  const { items, pending, send, retry, reset } = useAssistantChat('ko')
+function AssistantSection({ initialPrompt, userId, userName = '', department = '', studentNumber = '' }: AssistantSectionProps) {
+  const getTimetable = useCallback(() => getMyTimetable(userId), [userId])
+  const { items, pending, send, retry, reset } = useAssistantChat('ko', getTimetable)
   const suggestions = useMemo(() => getSuggestions(department, studentNumber), [department, studentNumber])
   const sentInitial = useRef<string | null>(null)
 

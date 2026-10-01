@@ -54,6 +54,7 @@ function MainSection({
       {activeTab === 'assistant' && (
         <AssistantSection
           initialPrompt={assistantPrompt}
+          userId={userId}
           userName={userName}
           department={department}
           studentNumber={studentNumber}

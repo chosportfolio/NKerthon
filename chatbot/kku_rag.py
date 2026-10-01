@@ -35,6 +35,7 @@ from typing import Optional
 import numpy as np
 import requests
 
+import kku_courses as kc
 import kku_keywords as kw
 
 HERE = Path(__file__).resolve().parent
@@ -245,12 +246,19 @@ SYSTEM = """너는 건국대학교 글로컬캠퍼스(충주) 학생을 돕는 '
    요람에 없는 학과·연도라면 그렇다고 말하고, 학과 사무실이나 학사지원팀(043-840-3253)에 확인하라고 안내해.
 6. 메신저 말풍선처럼 나눠서 답해. 첫 말풍선은 질문에 대한 핵심 답 1~2문장, 다음 말풍선부터 세부 내용(시간표·목록·주의사항·문의처 등)을 주제별로 하나씩.
    말풍선은 최대 {max_bubbles}개, 하나에 300자 이내. 말풍선 사이에는 [[NEXT]] 한 줄만 넣어. 짧은 답이면 말풍선 1개로 충분해.
-7. 답이 학과·학년·입학연도 등에 따라 달라지는데 [학생 정보]에도 질문에도 그 정보가 없으면, 공통으로 해당하는 내용만 짧게 말한 뒤 필요한 정보를 물어봐."""
+7. 답이 학과·학년·입학연도 등에 따라 달라지는데 [학생 정보]에도 질문에도 그 정보가 없으면, 공통으로 해당하는 내용만 짧게 말한 뒤 필요한 정보를 물어봐.
+8. '강의시간표' 자료는 그 학기에 실제로 열리는 강좌 목록이야. 과목의 학점·담당 교수·요일·시간·강의실은 이 자료를 우선해.
+   질문에 학기가 없으면 몇 학년도 몇 학기 기준인지 밝혀. 분반마다 교수·시간·강의실이 다르면 분반별로 나눠 알려줘.
+   목록이 길면 대표 과목 위주로 보여주고, 전체는 앱 '시간표' 탭의 강의 검색에서 볼 수 있다고 안내해.
+   '내 시간표' 자료는 학생이 앱에 직접 등록한 수업이야. 오늘·내일 수업 질문은 오늘 요일을 기준으로 이 자료에서 답해.
+   등록된 수업이 없으면 '확인이 안 돼요' 대신, 시간표 탭에서 수업을 추가하면 알려줄 수 있다고 안내해.
+9. "머리가 아파", "배고파", "다쳤어"처럼 학생이 자기 상황을 말하면, 자료에 있는 학교 시설·서비스(보건실, 학생식당,
+   상담센터 등)의 위치·운영시간·연락처를 먼저 안내해. 의학적 진단이나 처방은 하지 말고, 심하면 병원에 가라고 권해."""
 
 BUBBLE_SEP = "[[NEXT]]"
 LANG_RULE = {
-    "en": "8. Answer in English. Keep Korean proper nouns (course names, buildings) in Korean with a short English gloss.",
-    "zh": "8. 请用中文回答。课程名、建筑名等韩语专有名词保留韩语原文，并附简短中文说明。",
+    "en": "10. Answer in English. Keep Korean proper nouns (course names, buildings) in Korean with a short English gloss.",
+    "zh": "10. 请用中文回答。课程名、建筑名等韩语专有名词保留韩语原文，并附简短中文说明。",
 }
 # 입학연도(학번)에 따라 답이 달라지는 주제 — 이 단어가 있으면 학번에 맞는 요람을 우대
 YEAR_TOPICS = ["졸업", "교양", "전공", "학점", "교육과정", "커리큘럼", "요람", "필수", "이수", "다전공", "부전공",
@@ -269,17 +277,47 @@ def extract_slots(text: str) -> dict:
     for m in re.finditer(r"([가-힣/]{2,}(?:학과|학부|전공))", text):
         if m.group(1) not in _NOT_DEPT:
             slots["학과"] = m.group(1)
+    if "학과" not in slots:                                  # '컴공 전선 뭐 있어' 같은 줄임말
+        slots.update({"학과": full for alias, full in kc.DEPT_ALIASES.items() if alias in text})
     m = (re.search(r"(20\d{2})\s*(?:학번|학년도|년도?\s*(?:에\s*)?(?:입학|들어))", text)
-         or re.search(r"(?<!\d)(\d{2})\s*(?:학번|년도?\s*(?:에\s*)?입학)", text))
+         or re.search(r"(?<!\d)(\d{2})\s*(?:학번|학년도|년도?\s*(?:에\s*)?입학)", text))
     if m:
         y = m.group(1)
         slots["입학연도"] = y if len(y) == 4 else f"20{y}"
-    m = re.search(r"([1-4])\s*학년", text)
+    m = re.search(r"(?<!\d)([1-4])\s*학년(?!도)", text)       # '22학년도'의 '2학년'은 학년이 아님
     if m:
         slots["학년"] = f"{m.group(1)}학년"
     elif "신입생" in text or "새내기" in text:
         slots["학년"] = "1학년"
     return slots
+
+
+_DEPT_SUFFIX = re.compile(r"(학과|학부|전공|트랙|과)$")
+
+
+def _dept_core(name: str) -> str:
+    """'컴퓨터공학과'·'컴퓨터공학전공' → '컴퓨터공학' (학과 이름이 해마다 바뀌어도 같은 학과로 보도록)"""
+    s = re.sub(r"[\s·･()]", "", name)
+    while _DEPT_SUFFIX.search(s) and len(s) > 2:
+        s = _DEPT_SUFFIX.sub("", s)
+    return s
+
+
+def other_dept_yoram(h: dict, dept: str, question: str) -> bool:
+    """학생 학과와 다른 학과·전공의 요람 자료인지. 학부·학사 안내 같은 공통 자료와 질문에 나온 학과는 제외."""
+    if h.get("source") != "yoram" or not dept:
+        return False
+    m = re.search(r"학사요람 - (.+)$", h.get("title", ""))
+    if not m:
+        return False
+    name = re.sub(r"\(.*", "", m.group(1)).strip()
+    if "학부" in name or not re.search(r"(학과|전공|트랙)$", name.replace(" ", "")):
+        return False
+    a, b = _dept_core(name), _dept_core(dept)
+    if not a or not b or a in b or b in a:
+        return False
+    q = kw._compact(question)
+    return a not in q and a[:max(3, len(a) - 2)] not in q          # "메카트로닉스 과목"처럼 줄여 불러도 질문에 나온 학과로
 
 
 def load_clarify(path: Path = HERE / "clarify.json") -> list:
@@ -320,9 +358,10 @@ class Bot:
         self.llm = LLM()
         self.retriever = Retriever(Path(data), self.llm)
         self.rules = load_clarify()
+        self.courses = kc.CourseCatalog()
 
     def answer(self, question: str, history: list | None = None, profile: dict | None = None,
-               k: int = 6, max_bubbles: int = 4, lang: str = "ko") -> dict:
+               k: int = 6, max_bubbles: int = 4, lang: str = "ko", timetable: list | None = None) -> dict:
         """
         profile: 앱이 이미 아는 학생 정보 (예: {"학과": "컴퓨터공학과", "입학연도": "2022", "학년": "3학년"})
                  있으면 되묻지 않고 바로 답한다. 대화에서 말한 정보가 profile보다 우선.
@@ -359,7 +398,22 @@ class Bot:
         said_year = "입학연도" in extract_slots(said)
         if not (said_year or rule or any(w in kw._compact(query) for w in YEAR_TOPICS)):
             year = None
-        hits = self.retriever.search(query.strip(), k=k, year=year)
+        hits = self.retriever.search(query.strip(), k=k + 3, year=year)
+        # 학과가 정해졌으면 다른 학과 요람은 빼서, 다른 학과 과목·학점을 근거로 답하지 않게 함
+        if slots.get("학과"):
+            hits = [h for h in hits if not other_dept_yoram(h, slots["학과"], query)]
+        hits = hits[:k]
+        # 과목·교수·개설강좌 질문은 강의시간표에서, '내 수업' 질문은 학생이 등록한 시간표에서 찾아 맨 앞에 붙임
+        extra = []
+        # 이어지는 질문이라도 이번 질문이 수업 얘기가 아니면 앞 질문의 과목을 다시 붙이지 않음 ('배고파' 등)
+        if kc.wants_personal(question):                      # 비어 있어도 "등록된 수업이 없어요"라고 안내하도록
+            extra.append(kc.personal_hit(timetable or []))
+        course = self.courses.lookup(question, slots)
+        if course is None and query != question and kc.asks_about_course(question):
+            course = self.courses.lookup(query, slots)          # "그거 누가 가르쳐?" → 앞 질문의 과목으로
+        if course:
+            extra.append(course)
+        hits = [h for h in extra if h] + hits
 
         now = datetime.now()
         today = f"{now.year}년 {now.month}월 {now.day}일 ({'월화수목금토일'[now.weekday()]})"
@@ -416,6 +470,10 @@ def _source_of(h: dict) -> dict:
         s["note"] = "운영자 정리 자료" + (" (원문 링크)" if s["url"] else "")
     elif src == "schedule":
         s["note"] = "학교 학사일정"
+    elif src == "catalog":
+        s["note"] = "학교 강의시간표 (앱 시간표 탭 강의 검색과 같은 자료)"
+    elif src == "timetable":
+        s["note"] = "앱 시간표에 등록한 수업"
     else:
         s["note"] = ""
     return s
@@ -431,6 +489,8 @@ def _question_terms(question: str) -> list:
 
 def is_relevant(h: dict, question: str, answer: str) -> bool:
     """근거 검증: 질문의 핵심 단어가 자료에 있거나, 답변이 그 자료(메뉴·제목)를 직접 언급하면 관련 있음."""
+    if h.get("source") in ("catalog", "timetable"):      # 질문에 맞춰 골라 만든 자료라 항상 관련 있음
+        return True
     terms = _question_terms(question)
     if not terms:
         return True
@@ -443,19 +503,30 @@ def is_relevant(h: dict, question: str, answer: str) -> bool:
     return len(name) >= 4 and kw._compact(name) in kw._compact(answer)
 
 
+# 답이 아닌 문장: "확인이 안 돼요", "안내할 수 없어요", "~에 문의해 주세요" — 여기 붙은 번호는 근거로 치지 않음
+NON_ANSWER = re.compile(r"확인이\s*안|확인되지\s*않|확인할\s*수\s*없|확인이\s*어렵|자료에\s*(?:는\s*)?없|알\s*수\s*없|"
+                        r"안내할\s*수\s*없|도와드릴\s*수\s*없|드릴\s*수\s*없|"
+                        r"문의해|문의하세요|문의 바|확인해\s*(?:주세요|보세요)|확인하시")
+_SENTENCE = re.compile(r"[^.!?\n]+(?:[.!?]+|$)(?:\s*\[\d+\])*")      # 문장 + 뒤에 붙은 [n]
+
+
+def evidence_text(text: str) -> str:
+    """답변에서 실제로 무언가를 알려주는 문장만 남긴 텍스트 (번호 인용 판단용)"""
+    return " ".join(m.group() for m in _SENTENCE.finditer(text) if not NON_ANSWER.search(m.group()))
+
+
 def make_sources(hits: list, text: str, question: str = "") -> list:
-    """답변에 [n]으로 인용된 자료 중 질문과 관련 있는 것만 출처 목록으로.
-    인용이 하나도 없으면 관련 있는 자료 중 가장 위의 것을 '참고'로."""
+    """답변이 실제 정보를 주는 문장에서 [n]으로 인용했고, 질문과 관련 있는 자료만 출처로.
+    인용이 없거나('답할 수 없어요'·'문의해 주세요' 문장에만 번호가 붙은 경우 포함) 출처를 달지 않는다."""
+    evidence = evidence_text(text)
     out = {}
     for n, h in enumerate(hits, 1):
-        if f"[{n}]" in text and (not question or is_relevant(h, question, text)):
+        if (h.get("metadata") or {}).get("empty"):            # 빈 '내 시간표'는 근거가 아님
+            continue
+        if f"[{n}]" in evidence and (not question or is_relevant(h, question, text)):
             key = (h.get("url") or h["doc_id"], h.get("source"), _source_of(h)["page"])
             s = out.setdefault(key, {**_source_of(h), "n": [], "cited": True})
             s["n"].append(n)
-    if not out and hits:
-        top = next((h for h in hits if not question or is_relevant(h, question, text)), None)
-        if top is not None:
-            out["top"] = {**_source_of(top), "n": [hits.index(top) + 1], "cited": False}
     return list(out.values())
 
 

@@ -351,6 +351,11 @@
   box-shadow: 0 4px 14px rgb(16 40 24 / 7%);
 }
 
+.kubi-source-static:hover {
+  border-color: var(--kubi-line);
+  box-shadow: none;
+}
+
 .kubi-source-n {
   display: grid;
   min-width: 24px;
