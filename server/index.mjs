@@ -281,6 +281,27 @@ async function handleApi(request, response, pathname) {
         .map((turn) => ({ role: turn.role, content: turn.content.slice(0, 4000) }))
       : []
     const language = ['ko', 'en', 'zh'].includes(body.language) ? body.language : 'ko'
+    // 앱 시간표에 등록한 이번 학기 수업 ('오늘 수업 어디야?' 같은 질문에만 챗봇이 사용)
+    const timetable = Array.isArray(body.timetable)
+      ? body.timetable.slice(0, 30).flatMap((course) => {
+        if (typeof course?.name !== 'string' || !course.name.trim()) return []
+        const meetings = (Array.isArray(course.meetings) ? course.meetings : [])
+          .filter((meeting) => /^[월화수목금토일]$/.test(meeting?.day ?? ''))
+          .slice(0, 7)
+          .map((meeting) => ({
+            day: meeting.day,
+            startTime: String(meeting.startTime ?? '').slice(0, 5),
+            endTime: String(meeting.endTime ?? '').slice(0, 5),
+            room: String(meeting.room ?? '').slice(0, 60),
+          }))
+        return [{
+          name: course.name.trim().slice(0, 80),
+          credits: Number(course.credits) || 0,
+          professor: String(course.professor ?? '').slice(0, 40),
+          meetings,
+        }]
+      })
+      : []
 
     // 학과·학번은 화면이 아니라 로그인 정보에서 서버가 직접 붙인다 (위조 방지)
     const profile = {}
@@ -293,7 +314,7 @@ async function handleApi(request, response, pathname) {
       chatbotResponse = await fetch(`${chatbotUrl}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Client-Id': `user-${user.id}` },
-        body: JSON.stringify({ question, history, profile, language }),
+        body: JSON.stringify({ question, history, profile, language, timetable }),
         signal: AbortSignal.timeout(60_000),
       })
     } catch {

@@ -17,6 +17,8 @@ const KIND_LABEL: Record<string, string> = {
   page: '학교 홈페이지',
   manual: '정리 자료',
   schedule: '학사일정',
+  catalog: '강의시간표',
+  timetable: '내 시간표',
 }
 
 function ChatThread({ items, pending, onRetry }: Props) {
@@ -67,17 +69,27 @@ function ChatThread({ items, pending, onRetry }: Props) {
               <span className="kubi-avatar-space" />
               <div className="kubi-sources">
                 <p className="kubi-sources-title">근거 자료</p>
-                {item.sources.map((source) => (
-                  <a key={`${source.url}-${source.n.join()}`} className="kubi-source" href={source.url}
-                    target="_blank" rel="noopener noreferrer">
-                    <span className="kubi-source-n">{source.cited ? source.n.join(',') : '참고'}</span>
-                    <span className="kubi-source-body">
-                      <strong>{source.title}</strong>
-                      <small>{[KIND_LABEL[source.kind ?? ''], source.note].filter(Boolean).join(' · ')}</small>
-                    </span>
-                    <LinkGlyph />
-                  </a>
-                ))}
+                {item.sources.map((source) => {
+                  const body = (
+                    <>
+                      <span className="kubi-source-n">{source.cited ? source.n.join(',') : '참고'}</span>
+                      <span className="kubi-source-body">
+                        <strong>{source.title}</strong>
+                        <small>{[KIND_LABEL[source.kind ?? ''], source.note].filter(Boolean).join(' · ')}</small>
+                      </span>
+                    </>
+                  )
+                  const key = `${source.url || source.title}-${source.n.join()}`
+                  // 강의시간표·내 시간표처럼 링크가 없는 자료는 누를 수 없는 카드로
+                  return source.url ? (
+                    <a key={key} className="kubi-source" href={source.url} target="_blank" rel="noopener noreferrer">
+                      {body}
+                      <LinkGlyph />
+                    </a>
+                  ) : (
+                    <div key={key} className="kubi-source kubi-source-static">{body}</div>
+                  )
+                })}
               </div>
             </div>
           )

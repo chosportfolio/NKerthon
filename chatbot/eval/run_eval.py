@@ -32,6 +32,7 @@ import openpyxl
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import kku_keywords as kw  # noqa: E402
+import kku_courses as kc   # noqa: E402
 import kku_rag as rag      # noqa: E402
 
 DATA = ROOT / "kku_data"
@@ -47,7 +48,8 @@ STAGES = {
     5: dict(name="⑤ + 직접 작성 자료", data="full", hybrid=True, fixed=False),
     6: dict(name="⑥ + 학번 인식 버그 수정", data="full", hybrid=True, fixed=True),
     7: dict(name="⑦ + 실패 분석 후 개선", data="full", hybrid=True, fixed=True),
-    8: dict(name="⑧ + 남은 오류 수정 (현재)", data="full", hybrid=True, fixed=True),
+    8: dict(name="⑧ + 남은 오류 수정", data="full", hybrid=True, fixed=True),
+    9: dict(name="⑨ + 강의시간표 연동 (현재)", data="full", hybrid=True, fixed=True, courses=True),
 }
 
 
@@ -104,6 +106,8 @@ def make_bot(stage: dict):
     bot.llm = rag.LLM()
     bot.retriever = rag.Retriever(d, bot.llm) if stage["hybrid"] else KeywordOnly(d)
     bot.rules = rag.load_clarify()
+    # 강의시간표 연동 전 단계는 빈 폴더를 넘겨 시간표 검색을 끔
+    bot.courses = kc.CourseCatalog() if stage.get("courses") else kc.CourseCatalog(ROOT / "_no_catalog")
     if not stage["fixed"]:
         bot.rules = [{k: v for k, v in r.items() if k != "except"} for r in bot.rules]
     return bot
@@ -218,16 +222,18 @@ def pct(a, b):
 
 
 def write_summary(summary: dict):
-    lines = ["| 단계 | 검색 1위 | 검색 상위6 | 답변 정답률(엄격) | 불확실 | 오답 |", "|---|---|---|---|---|---|"]
+    lines = ["| 단계 | 검색 1위 | 검색 상위6 | 답변 정답률(엄격) | 불확실 | 오답 | 답변 문항 |", "|---|---|---|---|---|---|---|"]
     for s in sorted(summary, key=int):
         r = summary[s]
         R, S = r.get("retrieval", {}), r.get("strict")
         name = STAGES.get(int(s), {}).get("name", r["name"])
-        cells = [pct(S["ok"], S["n"]), pct(S["unsure"], S["n"]), pct(S["bad"], S["n"])] if S else ["-", "-", "-"]
+        cells = ([pct(S["ok"], S["n"]), pct(S["unsure"], S["n"]), pct(S["bad"], S["n"]), str(S["n"])]
+                 if S else ["-", "-", "-", "-"])
         lines.append(f"| {name} | {pct(R.get('top1', 0), R.get('n', 0))} | {pct(R.get('top6', 0), R.get('n', 0))} | "
                      + " | ".join(cells) + " |")
-    lines += ["", "- 검색: 정답 문서가 1위 / 상위 6개(LLM에 넘기는 범위) 안에 있는 비율 (답변형 166문항)",
-              "- 답변(엄격): 핵심 키워드가 있고 첫 말풍선에 '확인이 안 돼요' 같은 단서가 없는 답만 정답 (181문항)",
+    lines += ["", "- 검색: 정답 문서가 1위 / 상위 6개(LLM에 넘기는 범위) 안에 있는 비율 (정답 문서가 지정된 답변형 문항)",
+              "- 답변(엄격): 핵심 키워드가 있고 첫 말풍선에 '확인이 안 돼요' 같은 단서가 없는 답만 정답",
+              "- 답변 문항 수가 다른 단계는 그 뒤에 평가 질문이 추가된 것 (⑨부터 강의시간표 16문항 추가)",
               "- 답변은 비용 때문에 일부 단계만 측정"]
     (OUT / "summary.md").write_text("\n".join(lines) + "\n", "utf-8")
     print("\n" + "\n".join(lines))

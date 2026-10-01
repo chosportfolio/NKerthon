@@ -37,12 +37,28 @@ class Turn(BaseModel):
     content: str = Field(max_length=4000)
 
 
+class Meeting(BaseModel):
+    day: str = Field(pattern="^[월화수목금토일]$")
+    startTime: str = Field(max_length=5)
+    endTime: str = Field(max_length=5)
+    room: str = Field(default="", max_length=60)
+
+
+class TimetableCourse(BaseModel):
+    name: str = Field(max_length=80)
+    credits: float = 0
+    professor: str = Field(default="", max_length=40)
+    meetings: list[Meeting] = Field(default_factory=list, max_length=7)
+
+
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500, examples=["경영학과 22학번 졸업학점 몇이야?"])
     history: list[Turn] = Field(default_factory=list, description="직전 대화 (앱이 보관, 최근 6개까지 사용)")
     profile: dict[str, str] = Field(default_factory=dict, examples=[{"학과": "경영학과", "입학연도": "2022"}],
                                     description="앱 로그인 정보. 있으면 학과·학번을 되묻지 않음")
     language: str = Field(default="ko", pattern="^(ko|en|zh)$", description="답변 언어")
+    timetable: list[TimetableCourse] = Field(default_factory=list, max_length=30,
+                                             description="학생이 앱에 등록한 이번 학기 수업 ('오늘 수업' 같은 질문에만 사용)")
 
 
 class Source(BaseModel):
@@ -100,7 +116,10 @@ def chat(req: ChatRequest, request: Request):
             raise HTTPException(429, f"오늘 질문 한도({DAILY_LIMIT}회)를 다 썼어요. 내일 다시 이용해 주세요.")
         counts[who] += 1
 
-    key = (req.question.strip(), tuple(sorted(req.profile.items())), req.language) if not req.history else None
+    timetable = [c.model_dump() for c in req.timetable]
+    # 내 시간표·오늘 날짜에 따라 답이 달라지므로 캐시 키에 함께 넣음
+    key = ((req.question.strip(), tuple(sorted(req.profile.items())), req.language,
+            repr(timetable), date.today().isoformat()) if not req.history else None)
     if key:
         with lock:
             hit = cache.get(key)
@@ -109,7 +128,7 @@ def chat(req: ChatRequest, request: Request):
 
     try:
         res = bot.answer(req.question.strip(), [t.model_dump() for t in req.history][-6:],
-                         profile=req.profile or None, lang=req.language)
+                         profile=req.profile or None, lang=req.language, timetable=timetable)
     except Exception as e:                                   # OpenAI 지연·오류 등
         print("오류:", e)
         raise HTTPException(502, "답변을 만드는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.")

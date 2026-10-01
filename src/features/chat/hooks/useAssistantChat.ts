@@ -2,10 +2,11 @@ import { useCallback, useRef, useState } from 'react'
 import { askChatbot, ChatbotUnavailableError } from '../api/chatApi'
 import { fallbackText } from '../constants/chatCopy'
 import { menuData } from '../data/menuData'
-import type { ChatItem, ChatLanguage, ChatTurn } from '../types/assistant'
+import type { ChatItem, ChatLanguage, ChatTurn, TimetableCourse } from '../types/assistant'
 import { getCurrentTime } from '../utils/chatUtils'
 
 const BUBBLE_DELAY_MS = 380
+const OFFLINE_SOURCE_KINDS = new Set(['catalog', 'timetable'])
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const normalize = (text: string) => text.toLowerCase().replace(/\s/g, '')
 let idCounter = 0
@@ -28,7 +29,8 @@ function keywordFallback(question: string, language: ChatLanguage): ChatItem {
   }
 }
 
-export function useAssistantChat(language: ChatLanguage = 'ko') {
+/** getTimetable: 질문할 때마다 앱 시간표에서 이번 학기 수업을 새로 읽어 함께 보냄 */
+export function useAssistantChat(language: ChatLanguage = 'ko', getTimetable?: () => TimetableCourse[]) {
   const [items, setItems] = useState<ChatItem[]>([])
   const [pending, setPending] = useState(false)
   const turnsRef = useRef<ChatTurn[]>([])
@@ -57,7 +59,7 @@ export function useAssistantChat(language: ChatLanguage = 'ko') {
     ])
 
     try {
-      const result = await askChatbot(question, turnsRef.current, language)
+      const result = await askChatbot(question, turnsRef.current, language, getTimetable?.() ?? [])
       if (!alive()) return
 
       for (const [index, bubble] of result.bubbles.entries()) {
@@ -66,7 +68,8 @@ export function useAssistantChat(language: ChatLanguage = 'ko') {
         setItems((current) => [...current, { id: newId(), kind: 'bot', text: bubble, time: getCurrentTime() }])
       }
 
-      const linked = result.sources.filter((source) => source.url)
+      // 링크가 없는 자료 중 강의시간표·내 시간표는 앱 안의 데이터라 카드로 보여 준다
+      const linked = result.sources.filter((source) => source.url || OFFLINE_SOURCE_KINDS.has(source.kind ?? ''))
       if (linked.length > 0) {
         await sleep(BUBBLE_DELAY_MS)
         if (!alive()) return
@@ -95,7 +98,7 @@ export function useAssistantChat(language: ChatLanguage = 'ko') {
     } finally {
       if (alive()) setPending(false)
     }
-  }, [language, pending])
+  }, [getTimetable, language, pending])
 
   const retry = useCallback((text: string) => {
     setItems((current) => {
