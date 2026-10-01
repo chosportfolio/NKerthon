@@ -13,6 +13,7 @@ const databasePath = process.env.DATABASE_PATH
 const dataDirectory = path.dirname(databasePath)
 const distDirectory = path.join(rootDirectory, 'dist')
 const port = Number(process.env.PORT) || 5174
+const chatbotUrl = process.env.CHATBOT_URL || 'http://127.0.0.1:8000'
 
 mkdirSync(dataDirectory, { recursive: true })
 
@@ -51,6 +52,62 @@ if (!userColumns.some((column) => column.name === 'role')) {
 }
 if (!userColumns.some((column) => column.name === 'profile_image')) {
   database.exec('ALTER TABLE users ADD COLUMN profile_image TEXT')
+}
+
+// 챗봇 답변 피드백 — 누가 썼는지(계정)는 저장하지 않는다
+database.exec(`
+  CREATE TABLE IF NOT EXISTS chat_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    department TEXT,
+    admission_year TEXT,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    sources TEXT NOT NULL DEFAULT '[]',
+    auto_flag TEXT,
+    rating TEXT,
+    reason TEXT,
+    comment TEXT,
+    rated_at TEXT
+  );
+`)
+
+// 답변 직후 피드백을 받을 수 있도록 최근 답변만 메모리에 잠시 보관한다.
+// DB에는 학생이 평가했거나, 답을 못 찾은 것으로 보이는 경우에만 남긴다.
+const recentAnswers = new Map()
+const RECENT_ANSWER_TTL_MS = 6 * 60 * 60 * 1000
+const RECENT_ANSWER_LIMIT = 5000
+const FEEDBACK_REASONS = ['wrong', 'bad_source', 'not_found', 'misunderstood', 'other']
+const HEDGE_WORDS = ['확인이안', '확인되지않', '확인할수없', '자료에없', '자료에는없', '알수없', '찾지못']
+
+function rememberAnswer(answerId, entry) {
+  const now = Date.now()
+  for (const [id, saved] of recentAnswers) {
+    if (recentAnswers.size < RECENT_ANSWER_LIMIT && now - saved.createdAt < RECENT_ANSWER_TTL_MS) break
+    recentAnswers.delete(id)
+  }
+  recentAnswers.set(answerId, { ...entry, createdAt: now })
+}
+
+/** 답을 못 찾았거나(단서 표현) 근거를 하나도 못 붙인 답변은 자동으로 모은다 */
+function detectAutoFlag(answer, sources) {
+  const compact = answer.replace(/\s/g, '')
+  if (HEDGE_WORDS.some((word) => compact.includes(word))) return 'uncertain'
+  if (!sources.some((source) => source?.url)) return 'no_source'
+  return null
+}
+
+function insertFeedback(record, fields = {}) {
+  const result = database.prepare(`
+    INSERT INTO chat_feedback
+      (department, admission_year, question, answer, sources, auto_flag, rating, reason, comment, rated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    record.department, record.admissionYear, record.question, record.answer,
+    JSON.stringify(record.sources), record.autoFlag,
+    fields.rating ?? null, fields.reason ?? null, fields.comment ?? null, fields.ratedAt ?? null,
+  )
+  return Number(result.lastInsertRowid)
 }
 
 const jsonHeaders = { 'Content-Type': 'application/json; charset=utf-8' }
@@ -206,6 +263,95 @@ async function handleApi(request, response, pathname) {
     database.prepare('UPDATE users SET profile_image = ? WHERE id = ?').run(profileImage, user.id)
     const updatedUser = database.prepare('SELECT * FROM users WHERE id = ?').get(user.id)
     return sendJson(response, 200, { user: publicUser(updatedUser) })
+  }
+
+  if (request.method === 'POST' && pathname === '/api/chat') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+
+    const body = await readJson(request)
+    const question = String(body.question ?? '').trim()
+    if (!question || question.length > 500) {
+      return sendJson(response, 400, { message: '질문은 1~500자로 입력해 주세요.' })
+    }
+    const history = Array.isArray(body.history)
+      ? body.history
+        .filter((turn) => ['user', 'assistant'].includes(turn?.role) && typeof turn?.content === 'string')
+        .slice(-6)
+        .map((turn) => ({ role: turn.role, content: turn.content.slice(0, 4000) }))
+      : []
+    const language = ['ko', 'en', 'zh'].includes(body.language) ? body.language : 'ko'
+
+    // 학과·학번은 화면이 아니라 로그인 정보에서 서버가 직접 붙인다 (위조 방지)
+    const profile = {}
+    if (user.department) profile['학과'] = user.department
+    const admissionYear = String(user.student_number ?? '').match(/^(20\d{2})/)?.[1]
+    if (admissionYear) profile['입학연도'] = admissionYear
+
+    let chatbotResponse
+    try {
+      chatbotResponse = await fetch(`${chatbotUrl}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Client-Id': `user-${user.id}` },
+        body: JSON.stringify({ question, history, profile, language }),
+        signal: AbortSignal.timeout(60_000),
+      })
+    } catch {
+      return sendJson(response, 503, { message: '챗봇 서버에 연결할 수 없습니다.', fallback: true })
+    }
+    const data = await chatbotResponse.json().catch(() => ({}))
+    if (!chatbotResponse.ok) {
+      const message = typeof data.detail === 'string' ? data.detail : '답변을 만들지 못했어요. 잠시 후 다시 시도해 주세요.'
+      return sendJson(response, chatbotResponse.status, { message })
+    }
+    const bubbles = Array.isArray(data.bubbles) ? data.bubbles : []
+    const sources = Array.isArray(data.sources) ? data.sources : []
+    const answer = typeof data.answer === 'string' ? data.answer : ''
+    const clarify = data.clarify ?? null
+
+    // 되묻기(학과·학번 확인)는 평가 대상이 아니다
+    let answerId = null
+    let autoFlag = null
+    if (!clarify && answer) {
+      answerId = randomBytes(12).toString('hex')
+      autoFlag = detectAutoFlag(answer, sources)
+      const record = {
+        department: profile['학과'] ?? null,
+        admissionYear: profile['입학연도'] ?? null,
+        question,
+        answer,
+        sources: sources.map(({ title, url, kind, page }) => ({ title, url, kind, page })),
+        autoFlag,
+      }
+      const feedbackId = autoFlag ? insertFeedback(record) : null
+      rememberAnswer(answerId, { ownerId: user.id, record, feedbackId })
+    }
+
+    return sendJson(response, 200, { bubbles, sources, clarify, answer, answerId, autoFlag })
+  }
+
+  if (request.method === 'POST' && pathname === '/api/chat/feedback') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+
+    const body = await readJson(request)
+    const saved = recentAnswers.get(String(body.answerId ?? ''))
+    if (!saved || saved.ownerId !== user.id) {
+      return sendJson(response, 404, { message: '평가할 수 있는 시간이 지났어요.' })
+    }
+    const rating = body.rating === 'up' || body.rating === 'down' ? body.rating : null
+    if (!rating) return sendJson(response, 400, { message: '평가 값이 올바르지 않습니다.' })
+    const reason = rating === 'down' && FEEDBACK_REASONS.includes(body.reason) ? body.reason : null
+    const comment = rating === 'down' ? String(body.comment ?? '').trim().slice(0, 300) || null : null
+    const ratedAt = new Date().toISOString()
+
+    if (saved.feedbackId) {
+      database.prepare('UPDATE chat_feedback SET rating = ?, reason = ?, comment = ?, rated_at = ? WHERE id = ?')
+        .run(rating, reason, comment, ratedAt, saved.feedbackId)
+    } else {
+      saved.feedbackId = insertFeedback(saved.record, { rating, reason, comment, ratedAt })
+    }
+    return sendJson(response, 200, { ok: true })
   }
 
   if (request.method === 'DELETE' && pathname === '/api/logout') {

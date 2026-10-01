@@ -8,6 +8,7 @@
     "dev:client": "vite",
     "api": "node server/index.mjs",
     "create:admin": "node server/create-admin.mjs",
+    "export:feedback": "node server/export-feedback.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
