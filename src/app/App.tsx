@@ -19,6 +19,7 @@ import '../features/auth/auth.css'
 import '../features/chat/chat.css'
 import '../shared/profile.css'
 import '../features/schedule/schedule.css'
+import '../features/taxi/taxi.css'
 
 function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -27,6 +28,36 @@ function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('home')
   const [suggestedQuestion] = useState(getRandomHomePrompt)
   const [assistantPrompt, setAssistantPrompt] = useState<string | null>(null)
+
+  useEffect(() => {
+    const desktopMedia = window.matchMedia('(hover: hover) and (pointer: fine)')
+
+    const updateDesktopScale = () => {
+      if (!desktopMedia.matches) {
+        document.documentElement.style.removeProperty('--desktop-app-scale')
+        return
+      }
+
+      const widthScale = window.innerWidth / 560
+      const heightScale = window.innerHeight / 860
+      document.documentElement.style.setProperty(
+        '--desktop-app-scale',
+        String(Math.min(widthScale, heightScale)),
+      )
+    }
+
+    updateDesktopScale()
+    window.addEventListener('resize', updateDesktopScale)
+    window.visualViewport?.addEventListener('resize', updateDesktopScale)
+    desktopMedia.addEventListener('change', updateDesktopScale)
+
+    return () => {
+      window.removeEventListener('resize', updateDesktopScale)
+      window.visualViewport?.removeEventListener('resize', updateDesktopScale)
+      desktopMedia.removeEventListener('change', updateDesktopScale)
+      document.documentElement.style.removeProperty('--desktop-app-scale')
+    }
+  }, [])
 
   useEffect(() => {
     const token = getSavedAuthToken()
@@ -88,6 +119,8 @@ function App() {
         suggestedQuestion={suggestedQuestion}
         assistantPrompt={assistantPrompt}
         onOpenAssistant={openAssistantWithPrompt}
+        onOpenTaxi={() => setActiveTab('taxi')}
+        onCloseTaxi={() => setActiveTab('home')}
       />
       <BottomNavigation activeTab={activeTab} onTabChange={changeTab} />
       {profileOpen && (

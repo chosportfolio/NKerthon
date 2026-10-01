@@ -14,6 +14,24 @@ const dataDirectory = path.dirname(databasePath)
 const distDirectory = path.join(rootDirectory, 'dist')
 const port = Number(process.env.PORT) || 5174
 const chatbotUrl = process.env.CHATBOT_URL || 'http://127.0.0.1:8000'
+const academicCalendarSourceUrl = 'https://www.kku.ac.kr/cms/FR_CON/index.do?MENU_ID=1350'
+const academicCalendarApiUrl = 'https://www.kku.ac.kr/ajax/FR_SCH_SVC/ScheduleListData.do'
+const academicCalendarFallback = [
+  { startDate: '2026-02-20', endDate: '2026-02-20', title: '2026년도 전기 학위수여식' },
+  { startDate: '2026-03-03', endDate: '2026-03-03', title: '2026학년도 1학기 개강(학기개시일)' },
+  { startDate: '2026-04-08', endDate: '2026-04-08', title: '수업일수 1/3선' },
+  { startDate: '2026-04-21', endDate: '2026-04-27', title: '중간고사 (4.20.(월)까지 등록휴학 가능)' },
+  { startDate: '2026-05-12', endDate: '2026-05-12', title: '학원창립 95주년 기념일' },
+  { startDate: '2026-05-15', endDate: '2026-05-15', title: '개교 80주년 기념일' },
+  { startDate: '2026-06-16', endDate: '2026-06-22', title: '기말고사' },
+  { startDate: '2026-06-23', endDate: '2026-08-30', title: '하계방학' },
+  { startDate: '2026-08-31', endDate: '2026-08-31', title: '2026학년도 2학기 개강(학기개시일)' },
+  { startDate: '2026-10-06', endDate: '2026-10-06', title: '수업일수 1/3선' },
+  { startDate: '2026-10-19', endDate: '2026-10-23', title: '중간고사 (10.18.(일)까지 등록휴학 가능)' },
+  { startDate: '2026-12-14', endDate: '2026-12-18', title: '기말고사' },
+  { startDate: '2026-12-21', endDate: '2027-02-26', title: '동계방학' },
+]
+let academicCalendarCache = null
 
 mkdirSync(dataDirectory, { recursive: true })
 
@@ -70,6 +88,44 @@ database.exec(`
     comment TEXT,
     rated_at TEXT
   );
+`)
+
+database.exec(`
+  CREATE TABLE IF NOT EXISTS taxi_parties (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    creator_id INTEGER NOT NULL,
+    departure TEXT NOT NULL,
+    destination TEXT NOT NULL,
+    departure_at TEXT NOT NULL,
+    capacity INTEGER NOT NULL CHECK (capacity BETWEEN 2 AND 4),
+    note TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed', 'cancelled')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS taxi_party_members (
+    party_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (party_id, user_id),
+    FOREIGN KEY (party_id) REFERENCES taxi_parties(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS taxi_party_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    party_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (party_id) REFERENCES taxi_parties(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS taxi_parties_departure_at_idx ON taxi_parties(departure_at);
+  CREATE INDEX IF NOT EXISTS taxi_party_members_user_idx ON taxi_party_members(user_id);
+  CREATE INDEX IF NOT EXISTS taxi_party_messages_party_idx ON taxi_party_messages(party_id, id);
 `)
 
 // 답변 직후 피드백을 받을 수 있도록 최근 답변만 메모리에 잠시 보관한다.
@@ -159,6 +215,47 @@ function publicUser(user) {
   }
 }
 
+function givenName(name) {
+  const normalized = String(name ?? '').trim()
+  return normalized.length >= 2 ? normalized.slice(1) : normalized
+}
+
+function publicTaxiParty(row) {
+  const memberCount = Number(row.member_count)
+  return {
+    id: Number(row.id),
+    departure: row.departure,
+    destination: row.destination,
+    departureAt: row.departure_at,
+    capacity: Number(row.capacity),
+    memberCount,
+    note: row.note,
+    status: row.status === 'open' && memberCount >= Number(row.capacity) ? 'full' : row.status,
+    creatorName: givenName(row.creator_name),
+    creatorDepartment: row.creator_department,
+    isOwner: Boolean(row.is_owner),
+    isMember: Boolean(row.is_member),
+  }
+}
+
+function getTaxiParties(userId) {
+  return database.prepare(`
+    SELECT
+      parties.*,
+      creators.name AS creator_name,
+      creators.department AS creator_department,
+      COUNT(members.user_id) AS member_count,
+      MAX(CASE WHEN members.user_id = ? THEN 1 ELSE 0 END) AS is_member,
+      CASE WHEN parties.creator_id = ? THEN 1 ELSE 0 END AS is_owner
+    FROM taxi_parties AS parties
+    JOIN users AS creators ON creators.id = parties.creator_id
+    LEFT JOIN taxi_party_members AS members ON members.party_id = parties.id
+    WHERE parties.status != 'cancelled' AND parties.departure_at > ?
+    GROUP BY parties.id
+    ORDER BY parties.departure_at ASC, parties.created_at ASC
+  `).all(userId, userId, new Date().toISOString()).map(publicTaxiParty)
+}
+
 function createSession(userId) {
   const token = randomBytes(32).toString('hex')
   const tokenHash = createHash('sha256').update(token).digest('hex')
@@ -185,7 +282,66 @@ function getSessionUser(request) {
   `).get(tokenHash, new Date().toISOString())
 }
 
+function normalizeScheduleDate(value) {
+  const date = String(value ?? '').trim()
+  if (/^\d{8}$/.test(date)) return `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null
+}
+
+async function fetchAcademicCalendar() {
+  const now = Date.now()
+  if (academicCalendarCache?.expiresAt > now) return academicCalendarCache.payload
+
+  const currentYear = new Date().getFullYear()
+  const years = [currentYear - 1, currentYear, currentYear + 1]
+  const results = await Promise.allSettled(years.map(async (year) => {
+    const body = new URLSearchParams({ SCH_YEAR: String(year), SCH_SITE_NO: '2' })
+    const result = await fetch(academicCalendarApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Referer': academicCalendarSourceUrl,
+        'User-Agent': 'Mozilla/5.0 KKU-Campus-App/1.0',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body,
+      signal: AbortSignal.timeout(5_000),
+    })
+    if (!result.ok) throw new Error(`학사일정 응답 오류: ${result.status}`)
+    return result.json()
+  }))
+
+  const events = results
+    .filter((result) => result.status === 'fulfilled')
+    .flatMap((result) => result.value?.data ?? [])
+    .map((item) => ({
+      startDate: normalizeScheduleDate(item.START_DAY),
+      endDate: normalizeScheduleDate(item.END_DAY) ?? normalizeScheduleDate(item.START_DAY),
+      title: String(item.SUBJECT ?? '').trim(),
+    }))
+    .filter((event) => event.startDate && event.endDate && event.title)
+
+  const uniqueEvents = [...new Map(events.map((event) => [
+    `${event.startDate}|${event.endDate}|${event.title}`,
+    event,
+  ])).values()].sort((first, second) => first.startDate.localeCompare(second.startDate))
+  const usingFallback = uniqueEvents.length === 0
+  const payload = {
+    events: usingFallback ? academicCalendarFallback : uniqueEvents,
+    sourceUrl: academicCalendarSourceUrl,
+    updatedAt: new Date().toISOString(),
+    usingFallback,
+  }
+
+  academicCalendarCache = { expiresAt: now + (usingFallback ? 10 * 60_000 : 6 * 60 * 60_000), payload }
+  return payload
+}
+
 async function handleApi(request, response, pathname) {
+  if (request.method === 'GET' && pathname === '/api/academic-calendar') {
+    return sendJson(response, 200, await fetchAcademicCalendar())
+  }
+
   if (request.method === 'POST' && pathname === '/api/signup') {
     const body = await readJson(request)
     const loginId = String(body.loginId ?? '').trim()
@@ -263,6 +419,203 @@ async function handleApi(request, response, pathname) {
     database.prepare('UPDATE users SET profile_image = ? WHERE id = ?').run(profileImage, user.id)
     const updatedUser = database.prepare('SELECT * FROM users WHERE id = ?').get(user.id)
     return sendJson(response, 200, { user: publicUser(updatedUser) })
+  }
+
+  if (request.method === 'GET' && pathname === '/api/taxi-parties') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+    return sendJson(response, 200, { parties: getTaxiParties(user.id) })
+  }
+
+  if (request.method === 'POST' && pathname === '/api/taxi-parties') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+
+    const body = await readJson(request)
+    const departure = String(body.departure ?? '').trim()
+    const destination = String(body.destination ?? '').trim()
+    const departureAt = String(body.departureAt ?? '')
+    const capacity = Number(body.capacity)
+    const note = String(body.note ?? '').trim()
+    const departureTime = new Date(departureAt).getTime()
+
+    if (!departure || !destination || departure.length > 60 || destination.length > 60) {
+      return sendJson(response, 400, { message: '출발지와 도착지를 60자 이내로 입력해 주세요.' })
+    }
+    if (departure === destination) {
+      return sendJson(response, 400, { message: '출발지와 도착지는 달라야 합니다.' })
+    }
+    if (!Number.isInteger(capacity) || capacity < 2 || capacity > 4) {
+      return sendJson(response, 400, { message: '전체 탑승 인원은 2~4명으로 선택해 주세요.' })
+    }
+    if (!Number.isFinite(departureTime) || departureTime < Date.now() + 10 * 60_000) {
+      return sendJson(response, 400, { message: '출발 시간은 현재보다 10분 이후로 설정해 주세요.' })
+    }
+    if (departureTime > Date.now() + 30 * 24 * 60 * 60_000) {
+      return sendJson(response, 400, { message: '출발 시간은 30일 이내로 설정해 주세요.' })
+    }
+    if (note.length > 120) {
+      return sendJson(response, 400, { message: '메모는 120자 이내로 입력해 주세요.' })
+    }
+
+    database.exec('BEGIN IMMEDIATE')
+    try {
+      const result = database.prepare(`
+        INSERT INTO taxi_parties (creator_id, departure, destination, departure_at, capacity, note)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(user.id, departure, destination, new Date(departureTime).toISOString(), capacity, note)
+      database.prepare('INSERT INTO taxi_party_members (party_id, user_id) VALUES (?, ?)')
+        .run(result.lastInsertRowid, user.id)
+      database.exec('COMMIT')
+    } catch (error) {
+      database.exec('ROLLBACK')
+      throw error
+    }
+    return sendJson(response, 201, { parties: getTaxiParties(user.id) })
+  }
+
+  const taxiMessagesMatch = pathname.match(/^\/api\/taxi-parties\/(\d+)\/messages$/)
+  if (taxiMessagesMatch && request.method === 'GET') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+    const partyId = Number(taxiMessagesMatch[1])
+    const membership = database.prepare(`
+      SELECT parties.status
+      FROM taxi_party_members AS members
+      JOIN taxi_parties AS parties ON parties.id = members.party_id
+      WHERE members.party_id = ? AND members.user_id = ?
+    `).get(partyId, user.id)
+    if (!membership || membership.status === 'cancelled') {
+      return sendJson(response, 403, { message: '참여 중인 택시팟의 채팅만 볼 수 있습니다.' })
+    }
+    const messages = database.prepare(`
+      SELECT messages.id, messages.message, messages.created_at, messages.user_id,
+             users.name, users.department
+      FROM taxi_party_messages AS messages
+      JOIN users ON users.id = messages.user_id
+      WHERE messages.party_id = ?
+      ORDER BY messages.id DESC
+      LIMIT 300
+    `).all(partyId).reverse().map((message) => ({
+      id: Number(message.id),
+      message: message.message,
+      createdAt: message.created_at,
+      senderName: givenName(message.name),
+      senderDepartment: message.department,
+      isMine: message.user_id === user.id,
+    }))
+    return sendJson(response, 200, { messages })
+  }
+
+  if (taxiMessagesMatch && request.method === 'POST') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+    const partyId = Number(taxiMessagesMatch[1])
+    const membership = database.prepare(`
+      SELECT parties.status
+      FROM taxi_party_members AS members
+      JOIN taxi_parties AS parties ON parties.id = members.party_id
+      WHERE members.party_id = ? AND members.user_id = ?
+    `).get(partyId, user.id)
+    if (!membership || membership.status === 'cancelled') {
+      return sendJson(response, 403, { message: '참여 중인 택시팟에만 메시지를 보낼 수 있습니다.' })
+    }
+    const body = await readJson(request)
+    const message = String(body.message ?? '').trim()
+    if (!message || message.length > 300) {
+      return sendJson(response, 400, { message: '메시지는 1~300자로 입력해 주세요.' })
+    }
+    database.prepare(
+      'INSERT INTO taxi_party_messages (party_id, user_id, message, created_at) VALUES (?, ?, ?, ?)',
+    ).run(partyId, user.id, message, new Date().toISOString())
+    const saved = database.prepare(`
+      SELECT messages.id, messages.message, messages.created_at, users.name, users.department
+      FROM taxi_party_messages AS messages
+      JOIN users ON users.id = messages.user_id
+      WHERE messages.id = last_insert_rowid()
+    `).get()
+    return sendJson(response, 201, {
+      message: {
+        id: Number(saved.id),
+        message: saved.message,
+        createdAt: saved.created_at,
+        senderName: givenName(saved.name),
+        senderDepartment: saved.department,
+        isMine: true,
+      },
+    })
+  }
+
+  const taxiPartyMatch = pathname.match(/^\/api\/taxi-parties\/(\d+)$/)
+  if (taxiPartyMatch && request.method === 'POST') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+    const partyId = Number(taxiPartyMatch[1])
+
+    database.exec('BEGIN IMMEDIATE')
+    try {
+      const party = database.prepare(`
+        SELECT parties.*, COUNT(members.user_id) AS member_count
+        FROM taxi_parties AS parties
+        LEFT JOIN taxi_party_members AS members ON members.party_id = parties.id
+        WHERE parties.id = ?
+        GROUP BY parties.id
+      `).get(partyId)
+      if (!party || party.status !== 'open' || new Date(party.departure_at).getTime() <= Date.now()) {
+        database.exec('ROLLBACK')
+        return sendJson(response, 409, { message: '현재 참여할 수 없는 택시팟입니다.' })
+      }
+      if (Number(party.member_count) >= Number(party.capacity)) {
+        database.exec('ROLLBACK')
+        return sendJson(response, 409, { message: '이미 모집 인원이 모두 찼습니다.' })
+      }
+      const existing = database.prepare(
+        'SELECT 1 FROM taxi_party_members WHERE party_id = ? AND user_id = ?',
+      ).get(partyId, user.id)
+      if (existing) {
+        database.exec('ROLLBACK')
+        return sendJson(response, 409, { message: '이미 참여 중인 택시팟입니다.' })
+      }
+      database.prepare('INSERT INTO taxi_party_members (party_id, user_id) VALUES (?, ?)')
+        .run(partyId, user.id)
+      database.exec('COMMIT')
+    } catch (error) {
+      database.exec('ROLLBACK')
+      throw error
+    }
+    return sendJson(response, 200, { parties: getTaxiParties(user.id) })
+  }
+
+  if (taxiPartyMatch && request.method === 'DELETE') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+    const partyId = Number(taxiPartyMatch[1])
+    const party = database.prepare('SELECT * FROM taxi_parties WHERE id = ?').get(partyId)
+    if (!party) return sendJson(response, 404, { message: '택시팟을 찾을 수 없습니다.' })
+
+    if (party.creator_id === user.id) {
+      database.prepare("UPDATE taxi_parties SET status = 'cancelled' WHERE id = ?").run(partyId)
+    } else {
+      const result = database.prepare(
+        'DELETE FROM taxi_party_members WHERE party_id = ? AND user_id = ?',
+      ).run(partyId, user.id)
+      if (result.changes === 0) return sendJson(response, 404, { message: '참여 중인 택시팟이 아닙니다.' })
+    }
+    return sendJson(response, 200, { parties: getTaxiParties(user.id) })
+  }
+
+  if (taxiPartyMatch && request.method === 'PATCH') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+    const partyId = Number(taxiPartyMatch[1])
+    const body = await readJson(request)
+    const status = body.status === 'closed' ? 'closed' : body.status === 'open' ? 'open' : null
+    if (!status) return sendJson(response, 400, { message: '모집 상태가 올바르지 않습니다.' })
+    const result = database.prepare(
+      'UPDATE taxi_parties SET status = ? WHERE id = ? AND creator_id = ? AND status != ?',
+    ).run(status, partyId, user.id, 'cancelled')
+    if (result.changes === 0) return sendJson(response, 403, { message: '방장만 모집 상태를 변경할 수 있습니다.' })
+    return sendJson(response, 200, { parties: getTaxiParties(user.id) })
   }
 
   if (request.method === 'POST' && pathname === '/api/chat') {

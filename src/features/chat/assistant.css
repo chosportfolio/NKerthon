@@ -608,7 +608,7 @@
   .kubi-typing span { animation: none; }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 480px) and (hover: none), (max-width: 480px) and (pointer: coarse) {
   .kubi-dock { padding: 8px 12px 12px; }
   .kubi-hello img { width: 72px; height: 72px; margin-bottom: 14px; }
   .kubi-hello h2 { font-size: 22px; }

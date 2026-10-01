@@ -17,6 +17,9 @@ function findPython() {
     path.join('C:\\miniconda3', 'envs', 'kku', exe),
     path.join(home, 'miniconda3', 'envs', 'kku', exe),
     path.join(home, 'anaconda3', 'envs', 'kku', exe),
+    process.platform === 'win32' && process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Python', 'Python312', 'python.exe')
+      : null,
   ].filter(Boolean)
   return candidates.find((candidate) => existsSync(candidate)) ?? 'python'
 }
