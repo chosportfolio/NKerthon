@@ -44,7 +44,14 @@ function MainSection({
       {activeTab === 'schedule' && (
         <ScheduleSection userId={userId} department={department} studentNumber={studentNumber} />
       )}
-      {activeTab === 'assistant' && <AssistantSection initialPrompt={assistantPrompt} />}
+      {activeTab === 'assistant' && (
+        <AssistantSection
+          initialPrompt={assistantPrompt}
+          userName={userName}
+          department={department}
+          studentNumber={studentNumber}
+        />
+      )}
       {activeTab === 'map' && <MapSection />}
     </main>
   )
