@@ -1,5 +1,4 @@
 import { currentAcademicTerm } from '../constants/academicTerms'
-import { defaultScheduleCourses } from '../constants/defaultSchedule'
 import type { AcademicTerm, ScheduleCourse } from '../types/schedule'
 
 type StoredCourse = Omit<ScheduleCourse, 'term'> & { term?: string }
@@ -12,7 +11,7 @@ export const getScheduleStorageKey = (userId: number) => `campus-schedule-${user
 
 export function loadScheduleCourses(userId: number) {
   const savedCourses = localStorage.getItem(getScheduleStorageKey(userId))
-  if (!savedCourses) return defaultScheduleCourses
+  if (!savedCourses) return []
 
   try {
     const parsedCourses = JSON.parse(savedCourses) as StoredCourse[]
@@ -30,6 +29,6 @@ export function loadScheduleCourses(userId: number) {
       return { ...course, term }
     })
   } catch {
-    return defaultScheduleCourses
+    return []
   }
 }
