@@ -17,17 +17,19 @@ export function loadScheduleCourses(userId: number) {
     const parsedCourses = JSON.parse(savedCourses) as StoredCourse[]
     const legacyMapping = JSON.parse(localStorage.getItem(`campus-semester-mapping-${userId}`) ?? '{}') as Record<string, string>
 
-    return parsedCourses.map((course): ScheduleCourse => {
-      const mappedTerm = course.term ? legacyMapping[course.term] : undefined
-      const term = isAcademicTerm(course.term)
-        ? course.term
-        : isAcademicTerm(course.sourceSemester)
-          ? course.sourceSemester
-          : isAcademicTerm(mappedTerm)
-            ? mappedTerm
-            : currentAcademicTerm
-      return { ...course, term }
-    })
+    return parsedCourses
+      .filter((course) => !course.id.startsWith('sample-'))
+      .map((course): ScheduleCourse => {
+        const mappedTerm = course.term ? legacyMapping[course.term] : undefined
+        const term = isAcademicTerm(course.term)
+          ? course.term
+          : isAcademicTerm(course.sourceSemester)
+            ? course.sourceSemester
+            : isAcademicTerm(mappedTerm)
+              ? mappedTerm
+              : currentAcademicTerm
+        return { ...course, term }
+      })
   } catch {
     return []
   }
