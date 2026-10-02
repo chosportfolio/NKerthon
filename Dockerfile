@@ -1,3 +1,18 @@
+FROM node:24-bookworm-slim AS frontend
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY index.html tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts ./
+COPY public ./public
+COPY src ./src
+
+ARG VITE_NAVER_MAP_KEY
+ENV VITE_NAVER_MAP_KEY=${VITE_NAVER_MAP_KEY}
+RUN npm run build
+
 FROM node:24-bookworm-slim
 
 RUN apt-get update \
@@ -15,6 +30,7 @@ COPY package.json package-lock.json ./
 COPY server ./server
 COPY scripts/start-production.mjs ./scripts/start-production.mjs
 COPY chatbot ./chatbot
+COPY --from=frontend /app/dist ./dist
 
 ENV NODE_ENV=production \
     CHATBOT_PYTHON=/app/.venv/bin/python \
