@@ -205,7 +205,7 @@ function AssistantSection({ initialPrompt, userId, userName = '', department = '
         <p className="kubi-disclaimer">
           AI 답변은 틀릴 수 있어요. 중요한 내용은 근거 자료에서 확인하세요.
           <br />
-          답변 개선을 위해 평가한 대화와 답을 찾지 못한 질문은 이름 없이 저장돼요.
+          대화는 내 계정의 대화 목록에 저장돼요. 답변 개선용 평가는 이름 없이 따로 모아요.
         </p>
       </div>
       {historyPanel}
