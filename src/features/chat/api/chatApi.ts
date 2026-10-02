@@ -1,4 +1,5 @@
 import { getSavedAuthToken } from '../../auth/api/authApi'
+import { apiUrl } from '../../../shared/api/url'
 import type {
   ChatLanguage,
   ChatResponse,
@@ -22,7 +23,7 @@ export async function askChatbot(
 
   let response: Response
   try {
-    response = await fetch('/api/chat', {
+    response = await fetch(apiUrl('/api/chat'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -65,7 +66,7 @@ export async function sendFeedback(
   const token = getSavedAuthToken()
   if (!token) throw new Error('로그인이 필요합니다.')
 
-  const response = await fetch('/api/chat/feedback', {
+  const response = await fetch(apiUrl('/api/chat/feedback'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -23,14 +23,16 @@ type Maps = {
     removeListener(listener: unknown): void;
   };
 };
-declare global { interface Window { naver?: { maps: Maps } } }
+declare global { interface Window { naver?: { maps: Maps }; navermap_authFailure?: () => void } }
 const CENTER = { lat: 36.9487809, lng: 127.9124301 };
 const OUTSIDE_CATEGORIES = ['밥집', '카페', '술집', '편의점', '기타생활', '기타오락'];
+const MAP_AUTH_FAILURE_EVENT = 'naver-map-auth-failure';
 let scriptPromise: Promise<void> | undefined;
 function loadNaverScript() {
   if (window.naver?.maps) return Promise.resolve();
   if (scriptPromise) return scriptPromise;
   scriptPromise = new Promise<void>((resolve, reject) => {
+    window.navermap_authFailure = () => window.dispatchEvent(new Event(MAP_AUTH_FAILURE_EVENT));
     const key = import.meta.env.VITE_NAVER_MAP_KEY;
     if (!key) { reject(new Error('.env.local의 VITE_NAVER_MAP_KEY를 확인하고 개발 서버를 다시 켜줘.')); return; }
     const existing = document.getElementById('naver-map-script') as HTMLScriptElement | null;
@@ -114,6 +116,15 @@ export default function MapSection() {
       `${p.name} ${p.address} ${p.description}`.toLocaleLowerCase().includes(term));
   }, [data, category, query]);
   const located = filtered.filter(hasCoordinates).length;
+
+  useEffect(() => {
+    const handleAuthFailure = () => {
+      setMap(null);
+      setError('네이버 지도 인증에 실패했습니다. 네이버 클라우드에서 Dynamic Map을 선택하고 Web 서비스 URL에 http://localhost:5173을 등록해 주세요.');
+    };
+    window.addEventListener(MAP_AUTH_FAILURE_EVENT, handleAuthFailure);
+    return () => window.removeEventListener(MAP_AUTH_FAILURE_EVENT, handleAuthFailure);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -229,15 +240,25 @@ export default function MapSection() {
   }
   return (
     <section className="feature-page campus-map">
-      <div className="feature-title"><span>건국대학교 글로컬캠퍼스</span><h2>캠퍼스 지도</h2></div>
+      <header className="cm-page-header">
+        <div>
+          <span>KU GLOCAL CAMPUS</span>
+          <h2>캠퍼스 지도</h2>
+          <p>교내 건물부터 학교 앞 맛집까지 한 번에 찾아보세요.</p>
+        </div>
+        <span className="cm-live-badge"><i aria-hidden="true" /> {located}곳 표시 중</span>
+      </header>
       <div className="cm-layout">
         <aside className="cm-sidebar" aria-label="장소 검색과 목록">
           <div className="cm-switch">
-            <button type="button" aria-pressed={mode === 'inside'} onClick={() => changeMode('inside')}>교내</button>
-            <button type="button" aria-pressed={mode === 'outside'} onClick={() => changeMode('outside')}>교외</button>
+            <button type="button" aria-pressed={mode === 'inside'} onClick={() => changeMode('inside')}><span aria-hidden="true">🏫</span> 교내</button>
+            <button type="button" aria-pressed={mode === 'outside'} onClick={() => changeMode('outside')}><span aria-hidden="true">📍</span> 교외</button>
           </div>
-          <label className="cm-search"><span className="cm-sr-only">장소 이름 또는 주소 검색</span>
-            <input type="search" placeholder="장소 이름 또는 주소 검색" value={query} onChange={e => { setQuery(e.target.value); setSelected(null); }} />
+          <label className="cm-search">
+            <span aria-hidden="true" className="cm-search-icon">⌕</span>
+            <span className="cm-sr-only">장소 이름 또는 주소 검색</span>
+            <input type="search" placeholder={mode === 'inside' ? '건물 이름을 검색해 보세요' : '맛집, 카페, 주소 검색'} value={query} onChange={e => { setQuery(e.target.value); setSelected(null); }} />
+            {query && <button type="button" aria-label="검색어 지우기" onClick={() => setQuery('')}>×</button>}
           </label>
           <div className="cm-filters" aria-label="카테고리">
             {['전체', ...categories].map(item => <button type="button" key={item} aria-pressed={category === item} onClick={() => { setCategory(item); setSelected(null); }}>{item}</button>)}
@@ -247,15 +268,6 @@ export default function MapSection() {
             <small>네이버 콘솔에서 Geocoding을 켠 뒤 눌러줘.</small>
             {geocodeMessage && <p role="status">{geocodeMessage}</p>}
           </div>}
-          <p className="cm-count" aria-live="polite">장소 {filtered.length}곳 · 지도 표시 {located}곳</p>
-          <div className="cm-list">
-            {filtered.length === 0 && <p className="cm-empty">{data.length === 0 ? '교내 건물 목록을 준비 중이야. 지도에서 건물 좌표를 먼저 모을 수 있어.' : '검색 결과가 없어. 검색어나 카테고리를 바꿔 봐.'}</p>}
-            {filtered.map(place => <button type="button" key={place.id} className={`cm-place ${selected?.id === place.id ? 'is-selected' : ''}`} aria-pressed={selected?.id === place.id} onClick={() => setSelected(place)}>
-              <span className="cm-place-top"><strong>{place.name}</strong><span className="cm-category">{place.category}</span></span>
-              <span className="cm-address">{place.address || '주소 정보 준비 중'}</span>
-              {!hasCoordinates(place) && <span className="cm-pending">위치 확인 중</span>}
-            </button>)}
-          </div>
         </aside>
         <div className="cm-right">
           <div className="cm-map-wrap">
@@ -263,6 +275,12 @@ export default function MapSection() {
             {!map && !error && <div className="cm-map-message" role="status">지도를 불러오는 중…</div>}
             {error && <div className="cm-map-message" role="alert"><p>{error}</p><button type="button" onClick={() => { setError(''); setAttempt(n => n + 1); }}>다시 연결</button></div>}
             {map && located === 0 && <p className="cm-map-notice">좌표가 등록되면 장소 마커가 표시돼</p>}
+            <button type="button" className="cm-recenter" aria-label="지도 중심으로 돌아가기" onClick={() => {
+              if (!map || !window.naver) return;
+              map.setCenter(new window.naver.maps.LatLng(mode === 'inside' ? 36.9494 : CENTER.lat, mode === 'inside' ? 127.9083 : CENTER.lng));
+              map.setZoom(mode === 'inside' ? 16 : 14);
+              setSelected(null);
+            }}>◎</button>
           </div>
           <div className="cm-helper">
             <label><input type="checkbox" checked={helper} onChange={e => setHelper(e.target.checked)} /> 좌표찍기 도우미</label>
@@ -277,8 +295,22 @@ export default function MapSection() {
             {mode === 'outside' && selected.description && <p className="cm-description">{selected.description.split('\n').map(line => line.trim()).filter(Boolean).map(line => `*${line}`).join('\n')}</p>}
             {mode === 'outside' && selected.source && <small>출처: {selected.source}</small>}
             {mode === 'outside' && <PlaceSuggestion key={selected.id} place={selected} />}
-          </article> : <div className="cm-detail cm-empty">목록이나 지도 마커를 누르면 장소 정보를 볼 수 있어.</div>}
+          </article> : null}
         </div>
+        <section className="cm-results" aria-label="검색된 장소">
+          <div className="cm-results-heading">
+            <div><span>{mode === 'inside' ? 'CAMPUS' : 'AROUND KU'}</span><h3>{category === '전체' ? (mode === 'inside' ? '교내 장소' : '학교 주변 추천') : category}</h3></div>
+            <p className="cm-count" aria-live="polite">{filtered.length}곳</p>
+          </div>
+          <div className="cm-list">
+            {filtered.length === 0 && <p className="cm-empty">{data.length === 0 ? '교내 건물 목록을 준비 중이에요.' : '검색 결과가 없어요. 검색어나 카테고리를 바꿔 보세요.'}</p>}
+            {filtered.map(place => <button type="button" key={place.id} className={`cm-place ${selected?.id === place.id ? 'is-selected' : ''}`} aria-pressed={selected?.id === place.id} onClick={() => setSelected(place)}>
+              <span className="cm-place-top"><strong>{place.name}</strong><span className="cm-category">{place.category}</span></span>
+              <span className="cm-address">{place.address || '주소 정보 준비 중'}</span>
+              <span className="cm-place-footer"><span>{hasCoordinates(place) ? '지도에서 보기' : '위치 확인 중'}</span><b aria-hidden="true">→</b></span>
+            </button>)}
+          </div>
+        </section>
       </div>
     </section>
   );

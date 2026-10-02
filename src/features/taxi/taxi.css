@@ -57,12 +57,23 @@
 .taxi-form-guide strong { color: #145b28; font-size: 16px; }
 .taxi-form-guide span { color: #66806d; font-size: 12px; }
 .taxi-create-form label, .taxi-create-form fieldset { position: relative; display: flex; margin: 0; padding: 0; flex-direction: column; gap: 8px; border: 0; color: #445049; font-size: 13px; font-weight: 800; }
-.taxi-create-form input, .taxi-create-form textarea { width: 100%; padding: 14px 15px; border: 1px solid #dce3df; border-radius: 14px; outline: 0; color: #1f2722; background: #fff; box-sizing: border-box; }
-.taxi-create-form input:focus, .taxi-create-form textarea:focus { border-color: #49a960; box-shadow: 0 0 0 3px rgb(0 131 31 / 9%); }
+.taxi-create-form input, .taxi-create-form select, .taxi-create-form textarea { width: 100%; min-height: 54px; padding: 14px 16px; border: 1px solid #dce3df; border-radius: 14px; outline: 0; color: #1f2722; background: #fff; box-sizing: border-box; font-size: 16px; }
+.taxi-create-form input:focus, .taxi-create-form select:focus, .taxi-create-form textarea:focus { border-color: #49a960; box-shadow: 0 0 0 4px rgb(0 131 31 / 10%); }
+.taxi-create-form input[type='datetime-local'] { cursor: pointer; }
+.taxi-create-form input[type='datetime-local']::-webkit-calendar-picker-indicator { width: 26px; height: 26px; margin: -7px; padding: 7px; cursor: pointer; }
+.taxi-create-form select {
+  padding-right: 46px;
+  border-radius: 12px;
+  background-color: #fff;
+  font-weight: 700;
+  appearance: auto;
+  cursor: pointer;
+}
+.taxi-create-form .taxi-custom-place { margin-top: 2px; border-style: dashed; background: #fafcfb; }
 .taxi-create-form textarea { min-height: 88px; resize: vertical; }
 .taxi-create-form label > small { position: absolute; right: 10px; bottom: 8px; color: #9ba19d; font-size: 10px; font-weight: 400; }
 .taxi-capacity-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.taxi-capacity-options button { padding: 13px; border: 1px solid #dce3df; border-radius: 13px; color: #66706a; background: #fff; cursor: pointer; }
+.taxi-capacity-options button { min-height: 54px; padding: 13px; border: 1px solid #dce3df; border-radius: 13px; color: #66706a; background: #fff; font-size: 15px; cursor: pointer; touch-action: manipulation; }
 .taxi-capacity-options button.is-selected { border-color: var(--app-green); color: var(--app-green); background: #edf8ef; font-weight: 800; }
 .taxi-primary-button { padding: 15px; border: 0; border-radius: 15px; color: #fff; background: var(--app-green); font-weight: 800; cursor: pointer; }
 .taxi-primary-button:disabled { opacity: 0.6; }
@@ -97,6 +108,8 @@
   .taxi-page-header h1 { font-size: 21px; }
   .taxi-create-button { padding: 10px 11px; font-size: 11px; }
   .taxi-content, .taxi-create-form { padding: 16px 14px 30px; gap: 14px; }
+  .taxi-create-form input, .taxi-create-form select { min-height: 58px; }
+  .taxi-capacity-options button { min-height: 58px; }
   .taxi-hero { padding: 16px; }
   .taxi-hero > span { width: 44px; height: 44px; font-size: 22px; }
   .taxi-hero strong { font-size: 14px; }

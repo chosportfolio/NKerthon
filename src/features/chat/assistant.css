@@ -11,6 +11,7 @@
   --kubi-bot: #f3f5f4;
 
   display: flex;
+  position: relative;
   height: 100%;
   flex-direction: column;
   color: var(--kubi-text);
@@ -96,6 +97,35 @@
 /* 가운데 인사 + 아래 추천 질문·입력창 */
 .kubi-empty {
   justify-content: flex-end;
+  overflow: hidden;
+}
+
+.kubi-history-trigger {
+  display: inline-flex;
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  right: 18px;
+  padding: 8px 12px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--kubi-line);
+  border-radius: 999px;
+  color: #59615c;
+  background: rgb(255 255 255 / 92%);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.kubi-history-trigger svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .kubi-hello {
@@ -109,12 +139,10 @@
 }
 
 .kubi-hello img {
-  width: 88px;
-  height: 88px;
+  width: 118px;
+  height: 118px;
   margin-bottom: 18px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: #f1f6f2;
+  object-fit: contain;
 }
 
 .kubi-hello h2 {
@@ -211,6 +239,12 @@
   background: #f6f8f7;
 }
 
+.kubi-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
 .kubi-toolbar svg {
   width: 18px;
   height: 18px;
@@ -218,6 +252,194 @@
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
+}
+
+/* ---------- 저장된 대화 목록 ---------- */
+
+.kubi-history-backdrop {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  border: 0;
+  background: rgb(16 25 19 / 24%);
+  cursor: pointer;
+}
+
+.kubi-history-panel {
+  display: flex;
+  position: absolute;
+  z-index: 21;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(88%, 380px);
+  flex-direction: column;
+  background: #fff;
+  box-shadow: -18px 0 48px rgb(24 39 29 / 14%);
+  animation: kubi-history-enter 180ms ease-out;
+}
+
+@keyframes kubi-history-enter {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.kubi-history-header {
+  display: flex;
+  padding: 22px 18px 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 1px solid #eef1ef;
+}
+
+.kubi-history-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.kubi-history-header strong {
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+
+.kubi-history-header span {
+  color: var(--kubi-muted);
+  font-size: 12px;
+}
+
+.kubi-history-header > button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  color: #68706b;
+  background: #f3f5f4;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.kubi-history-list {
+  min-height: 0;
+  padding: 12px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.kubi-history-item {
+  display: flex;
+  margin-bottom: 6px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 15px;
+  background: #f7f9f8;
+}
+
+.kubi-history-item.is-current {
+  border-color: rgb(0 131 31 / 18%);
+  background: rgb(0 131 31 / 7%);
+}
+
+.kubi-history-open {
+  display: flex;
+  min-width: 0;
+  padding: 13px 8px 13px 14px;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: 0;
+  color: var(--kubi-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kubi-history-open strong {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kubi-history-open span {
+  color: var(--kubi-muted);
+  font-size: 11px;
+}
+
+.kubi-history-delete {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  margin-right: 7px;
+  flex: 0 0 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #a1a8a3;
+  background: transparent;
+  cursor: pointer;
+}
+
+.kubi-history-delete svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.kubi-history-delete:hover {
+  color: #b52f2f;
+  background: #fff;
+}
+
+.kubi-history-status {
+  padding: 30px 12px;
+  color: var(--kubi-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.kubi-history-status-error {
+  color: #b52f2f;
+}
+
+.kubi-history-empty {
+  display: flex;
+  min-height: 220px;
+  padding: 20px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--kubi-muted);
+  text-align: center;
+}
+
+.kubi-history-empty svg {
+  width: 34px;
+  height: 34px;
+  margin-bottom: 12px;
+  fill: none;
+  stroke: #9eaaa2;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.kubi-history-empty strong {
+  margin-bottom: 5px;
+  color: #59615c;
+  font-size: 14px;
+}
+
+.kubi-history-empty span {
+  font-size: 12px;
 }
 
 .kubi-thread {
@@ -248,9 +470,35 @@
 }
 
 .kubi-avatar {
-  border-radius: 50%;
-  object-fit: cover;
-  background: #eef4f0;
+  object-fit: contain;
+  background: transparent;
+}
+
+.kubi-message {
+  display: flex;
+  max-width: min(78%, 560px);
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kubi-message-user {
+  align-items: flex-end;
+}
+
+.kubi-message-bot {
+  align-items: flex-start;
+}
+
+.kubi-message .kubi-bubble {
+  max-width: 100%;
+}
+
+.kubi-message-time {
+  padding: 0 5px;
+  color: #98a19b;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 
 .kubi-bubble {
@@ -615,7 +863,7 @@
 
 @media (max-width: 480px) and (hover: none), (max-width: 480px) and (pointer: coarse) {
   .kubi-dock { padding: 8px 12px 12px; }
-  .kubi-hello img { width: 72px; height: 72px; margin-bottom: 14px; }
+  .kubi-hello img { width: 96px; height: 96px; margin-bottom: 14px; }
   .kubi-hello h2 { font-size: 22px; }
   .kubi-hello p { font-size: 14px; }
   .kubi-composer { min-height: 54px; padding-left: 18px; }

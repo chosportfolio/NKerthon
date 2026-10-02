@@ -14,6 +14,12 @@ const dataDirectory = path.dirname(databasePath)
 const distDirectory = path.join(rootDirectory, 'dist')
 const port = Number(process.env.PORT) || 5174
 const chatbotUrl = process.env.CHATBOT_URL || 'http://127.0.0.1:8000'
+const allowedOrigins = new Set(
+  (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean),
+)
 const academicCalendarSourceUrl = 'https://www.kku.ac.kr/cms/FR_CON/index.do?MENU_ID=1350'
 const academicCalendarApiUrl = 'https://www.kku.ac.kr/ajax/FR_SCH_SVC/ScheduleListData.do'
 const academicCalendarFallback = [
@@ -88,6 +94,30 @@ database.exec(`
     comment TEXT,
     rated_at TEXT
   );
+`)
+
+database.exec(`
+  CREATE TABLE IF NOT EXISTS chat_conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS chat_conversation_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS chat_conversations_user_updated_idx
+    ON chat_conversations(user_id, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS chat_conversation_items_conversation_idx
+    ON chat_conversation_items(conversation_id, id);
 `)
 
 database.exec(`
@@ -171,6 +201,44 @@ const jsonHeaders = { 'Content-Type': 'application/json; charset=utf-8' }
 function sendJson(response, status, payload) {
   response.writeHead(status, jsonHeaders)
   response.end(JSON.stringify(payload))
+}
+
+function normalizeChatHistoryItem(value) {
+  if (!value || typeof value !== 'object') return null
+  const id = String(value.id ?? '').slice(0, 100)
+  const time = String(value.time ?? '').slice(0, 30)
+
+  if (value.kind === 'user' || value.kind === 'bot') {
+    const text = String(value.text ?? '').trim().slice(0, 8000)
+    if (!text) return null
+    const normalized = { id, kind: value.kind, text, time }
+    if (value.kind === 'bot' && Array.isArray(value.links)) {
+      normalized.links = value.links.slice(0, 20).flatMap((link) => {
+        const url = String(link?.url ?? '').trim()
+        if (!/^https?:\/\//i.test(url)) return []
+        return [{ text: String(link?.text ?? '').slice(0, 120), url: url.slice(0, 2000) }]
+      })
+    }
+    return normalized
+  }
+
+  if (value.kind === 'sources' && Array.isArray(value.sources)) {
+    return {
+      id,
+      kind: 'sources',
+      sources: value.sources.slice(0, 30).map((source) => ({
+        n: Array.isArray(source?.n) ? source.n.filter(Number.isInteger).slice(0, 10) : [],
+        title: String(source?.title ?? '').slice(0, 300),
+        url: /^https?:\/\//i.test(String(source?.url ?? '')) ? String(source.url).slice(0, 2000) : '',
+        kind: source?.kind == null ? null : String(source.kind).slice(0, 40),
+        note: String(source?.note ?? '').slice(0, 500),
+        page: Number.isInteger(source?.page) ? source.page : null,
+        cited: Boolean(source?.cited),
+      })),
+    }
+  }
+
+  return null
 }
 
 function readJson(request) {
@@ -338,6 +406,10 @@ async function fetchAcademicCalendar() {
 }
 
 async function handleApi(request, response, pathname) {
+  if (request.method === 'GET' && pathname === '/api/health') {
+    return sendJson(response, 200, { ok: true })
+  }
+
   if (request.method === 'GET' && pathname === '/api/academic-calendar') {
     return sendJson(response, 200, await fetchAcademicCalendar())
   }
@@ -618,6 +690,113 @@ async function handleApi(request, response, pathname) {
     return sendJson(response, 200, { parties: getTaxiParties(user.id) })
   }
 
+  if (request.method === 'GET' && pathname === '/api/chat/conversations') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+
+    const conversations = database.prepare(`
+      SELECT id, title, created_at, updated_at,
+        (SELECT COUNT(*) FROM chat_conversation_items WHERE conversation_id = chat_conversations.id) AS item_count
+      FROM chat_conversations
+      WHERE user_id = ?
+      ORDER BY updated_at DESC, id DESC
+      LIMIT 100
+    `).all(user.id).map((conversation) => ({
+      id: Number(conversation.id),
+      title: conversation.title,
+      createdAt: conversation.created_at,
+      updatedAt: conversation.updated_at,
+      itemCount: Number(conversation.item_count),
+    }))
+    return sendJson(response, 200, { conversations })
+  }
+
+  if (request.method === 'POST' && pathname === '/api/chat/conversations') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+
+    const body = await readJson(request)
+    const title = String(body.title ?? '').trim().replace(/\s+/g, ' ').slice(0, 80) || '새 대화'
+    const now = new Date().toISOString()
+    const result = database.prepare(`
+      INSERT INTO chat_conversations (user_id, title, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
+    `).run(user.id, title, now, now)
+    return sendJson(response, 201, {
+      conversation: { id: Number(result.lastInsertRowid), title, createdAt: now, updatedAt: now, itemCount: 0 },
+    })
+  }
+
+  const chatConversationMatch = pathname.match(/^\/api\/chat\/conversations\/(\d+)$/)
+  if (chatConversationMatch && request.method === 'GET') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+
+    const conversationId = Number(chatConversationMatch[1])
+    const conversation = database.prepare(`
+      SELECT id, title, created_at, updated_at
+      FROM chat_conversations
+      WHERE id = ? AND user_id = ?
+    `).get(conversationId, user.id)
+    if (!conversation) return sendJson(response, 404, { message: '대화 기록을 찾을 수 없습니다.' })
+
+    const items = database.prepare(`
+      SELECT payload FROM chat_conversation_items
+      WHERE conversation_id = ?
+      ORDER BY id ASC
+    `).all(conversationId).flatMap((row) => {
+      try {
+        const item = normalizeChatHistoryItem(JSON.parse(row.payload))
+        return item ? [item] : []
+      } catch {
+        return []
+      }
+    })
+    return sendJson(response, 200, {
+      conversation: {
+        id: Number(conversation.id),
+        title: conversation.title,
+        createdAt: conversation.created_at,
+        updatedAt: conversation.updated_at,
+        itemCount: items.length,
+      },
+      items,
+    })
+  }
+
+  if (chatConversationMatch && request.method === 'DELETE') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+    const result = database.prepare(
+      'DELETE FROM chat_conversations WHERE id = ? AND user_id = ?',
+    ).run(Number(chatConversationMatch[1]), user.id)
+    if (result.changes === 0) return sendJson(response, 404, { message: '대화 기록을 찾을 수 없습니다.' })
+    return sendJson(response, 200, { ok: true })
+  }
+
+  const chatConversationItemsMatch = pathname.match(/^\/api\/chat\/conversations\/(\d+)\/items$/)
+  if (chatConversationItemsMatch && request.method === 'POST') {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+
+    const conversationId = Number(chatConversationItemsMatch[1])
+    const owned = database.prepare(
+      'SELECT id FROM chat_conversations WHERE id = ? AND user_id = ?',
+    ).get(conversationId, user.id)
+    if (!owned) return sendJson(response, 404, { message: '대화 기록을 찾을 수 없습니다.' })
+
+    const body = await readJson(request)
+    const item = normalizeChatHistoryItem(body.item)
+    if (!item) return sendJson(response, 400, { message: '저장할 대화 내용이 올바르지 않습니다.' })
+    const now = new Date().toISOString()
+    database.prepare(`
+      INSERT INTO chat_conversation_items (conversation_id, payload, created_at)
+      VALUES (?, ?, ?)
+    `).run(conversationId, JSON.stringify(item), now)
+    database.prepare('UPDATE chat_conversations SET updated_at = ? WHERE id = ?').run(now, conversationId)
+    return sendJson(response, 201, { item })
+  }
+
   if (request.method === 'POST' && pathname === '/api/chat') {
     const user = getSessionUser(request)
     if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
@@ -771,6 +950,25 @@ function serveStatic(response, pathname) {
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
+  const origin = String(request.headers.origin ?? '').replace(/\/$/, '')
+
+  if (origin && allowedOrigins.has(origin)) {
+    response.setHeader('Access-Control-Allow-Origin', origin)
+    response.setHeader('Vary', 'Origin')
+    response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type')
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
+  }
+  response.setHeader('X-Content-Type-Options', 'nosniff')
+  response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+
+  if (request.method === 'OPTIONS') {
+    if (!origin || !allowedOrigins.has(origin)) {
+      return sendJson(response, 403, { message: '허용되지 않은 출처입니다.' })
+    }
+    response.writeHead(204)
+    response.end()
+    return
+  }
 
   try {
     if (url.pathname.startsWith('/api/')) {

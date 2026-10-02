@@ -1,4 +1,5 @@
 import { getSavedAuthToken } from '../../auth/api/authApi'
+import { apiUrl } from '../../../shared/api/url'
 import type { CreateTaxiPartyData, TaxiParty, TaxiPartyMessage } from '../types/taxiParty'
 
 async function request(url: string, options?: RequestInit) {
@@ -7,7 +8,7 @@ async function request(url: string, options?: RequestInit) {
 
   let response: Response
   try {
-    response = await fetch(url, {
+    response = await fetch(apiUrl(url), {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -50,7 +51,7 @@ export function changeTaxiPartyStatus(partyId: number, status: 'open' | 'closed'
 export async function getTaxiPartyMessages(partyId: number, signal?: AbortSignal) {
   const token = getSavedAuthToken()
   if (!token) throw new Error('로그인이 필요합니다.')
-  const response = await fetch(`/api/taxi-parties/${partyId}/messages`, {
+  const response = await fetch(apiUrl(`/api/taxi-parties/${partyId}/messages`), {
     headers: { Authorization: `Bearer ${token}` },
     signal,
   })
@@ -62,7 +63,7 @@ export async function getTaxiPartyMessages(partyId: number, signal?: AbortSignal
 export async function sendTaxiPartyMessage(partyId: number, message: string) {
   const token = getSavedAuthToken()
   if (!token) throw new Error('로그인이 필요합니다.')
-  const response = await fetch(`/api/taxi-parties/${partyId}/messages`, {
+  const response = await fetch(apiUrl(`/api/taxi-parties/${partyId}/messages`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ message }),

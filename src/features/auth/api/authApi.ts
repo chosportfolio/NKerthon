@@ -1,4 +1,5 @@
 import type { SignupData, User } from '../types/auth'
+import { apiUrl } from '../../../shared/api/url'
 
 const persistentTokenKey = 'campus-auth-token'
 const sessionTokenKey = 'campus-session-token'
@@ -12,7 +13,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   let response: Response
 
   try {
-    response = await fetch(url, {
+    response = await fetch(apiUrl(url), {
       ...options,
       headers: {
         'Content-Type': 'application/json',

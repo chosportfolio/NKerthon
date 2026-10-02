@@ -1,4 +1,4 @@
-import kuCharacter from "../../../assets/ku_character.png";
+import kuChatAvatar from "../../../assets/ku_chat_avatar.png";
 import type { Message } from "../types/chat";
 
 export default function MessageBubble({
@@ -14,7 +14,7 @@ export default function MessageBubble({
     <div className={isUser ? "message-row user-row" : "message-row bot-row"}>
       {!isUser && (
         <img
-          src={kuCharacter}
+          src={kuChatAvatar}
           alt="쿠비 프로필"
           className="profile"
         />

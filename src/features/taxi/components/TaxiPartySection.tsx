@@ -50,6 +50,8 @@ function TaxiPartySection({ onBack }: TaxiPartySectionProps) {
   const [creating, setCreating] = useState(false)
   const [activeChatParty, setActiveChatParty] = useState<TaxiParty | null>(null)
   const [form, setForm] = useState(createInitialForm)
+  const [customDeparture, setCustomDeparture] = useState(false)
+  const [customDestination, setCustomDestination] = useState(false)
   const [loading, setLoading] = useState(true)
   const [pendingId, setPendingId] = useState<number | null>(null)
   const [error, setError] = useState('')
@@ -78,6 +80,14 @@ function TaxiPartySection({ onBack }: TaxiPartySectionProps) {
     }
   }
 
+  const confirmDeleteParty = (party: TaxiParty) => {
+    const confirmed = window.confirm(
+      `${party.departure} → ${party.destination} 택시팟을 삭제하시겠습니까?\n삭제한 팟과 채팅 기록은 복구할 수 없습니다.`,
+    )
+    if (!confirmed) return
+    void runPartyAction(party.id, () => leaveTaxiParty(party.id))
+  }
+
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setPendingId(0)
@@ -86,6 +96,8 @@ function TaxiPartySection({ onBack }: TaxiPartySectionProps) {
       const departureAt = new Date(form.departureAt).toISOString()
       setParties(await createTaxiParty({ ...form, departureAt }))
       setForm(createInitialForm())
+      setCustomDeparture(false)
+      setCustomDestination(false)
       setCreating(false)
       setFilter('mine')
     } catch (requestError) {
@@ -108,9 +120,59 @@ function TaxiPartySection({ onBack }: TaxiPartySectionProps) {
         </header>
         <form className="taxi-create-form" onSubmit={handleCreate}>
           <div className="taxi-form-guide"><strong>함께 이동할 경로를 알려주세요</strong><span>방장을 포함한 전체 인원을 선택합니다.</span></div>
-          <label>출발지<input list="taxi-places" value={form.departure} maxLength={60} onChange={(event) => setForm({ ...form, departure: event.target.value })} required /></label>
-          <label>도착지<input list="taxi-places" value={form.destination} maxLength={60} onChange={(event) => setForm({ ...form, destination: event.target.value })} placeholder="예: 충주역" required /></label>
-          <datalist id="taxi-places">{popularPlaces.map((place) => <option value={place} key={place} />)}</datalist>
+          <label>
+            출발지
+            <select
+              value={customDeparture ? 'custom' : form.departure}
+              onChange={(event) => {
+                const custom = event.target.value === 'custom'
+                setCustomDeparture(custom)
+                setForm({ ...form, departure: custom ? '' : event.target.value })
+              }}
+              required
+            >
+              {popularPlaces.map((place) => <option value={place} key={place}>{place}</option>)}
+              <option value="custom">직접 입력</option>
+            </select>
+            {customDeparture && (
+              <input
+                className="taxi-custom-place"
+                value={form.departure}
+                maxLength={60}
+                onChange={(event) => setForm({ ...form, departure: event.target.value })}
+                placeholder="출발지를 입력해 주세요"
+                autoFocus
+                required
+              />
+            )}
+          </label>
+          <label>
+            도착지
+            <select
+              value={customDestination ? 'custom' : form.destination}
+              onChange={(event) => {
+                const custom = event.target.value === 'custom'
+                setCustomDestination(custom)
+                setForm({ ...form, destination: custom ? '' : event.target.value })
+              }}
+              required={!customDestination}
+            >
+              <option value="" disabled>도착지를 선택해 주세요</option>
+              {popularPlaces.map((place) => <option value={place} key={place}>{place}</option>)}
+              <option value="custom">직접 입력</option>
+            </select>
+            {customDestination && (
+              <input
+                className="taxi-custom-place"
+                value={form.destination}
+                maxLength={60}
+                onChange={(event) => setForm({ ...form, destination: event.target.value })}
+                placeholder="도착지를 입력해 주세요"
+                autoFocus
+                required
+              />
+            )}
+          </label>
           <label>출발 시간<input type="datetime-local" value={form.departureAt} onChange={(event) => setForm({ ...form, departureAt: event.target.value })} required /></label>
           <fieldset>
             <legend>전체 탑승 인원</legend>
@@ -167,7 +229,7 @@ function TaxiPartySection({ onBack }: TaxiPartySectionProps) {
                       <>
                         <button className="is-chat" type="button" onClick={() => setActiveChatParty(party)}>팟 채팅</button>
                         <button type="button" disabled={pendingId === party.id} onClick={() => runPartyAction(party.id, () => changeTaxiPartyStatus(party.id, party.status === 'closed' ? 'open' : 'closed'))}>{party.status === 'closed' ? '모집 다시 열기' : '모집 마감'}</button>
-                        <button className="is-danger" type="button" disabled={pendingId === party.id} onClick={() => runPartyAction(party.id, () => leaveTaxiParty(party.id))}>팟 삭제</button>
+                        <button className="is-danger" type="button" disabled={pendingId === party.id} onClick={() => confirmDeleteParty(party)}>팟 삭제</button>
                       </>
                     ) : party.isMember ? (
                       <>

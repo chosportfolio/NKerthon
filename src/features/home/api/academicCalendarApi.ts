@@ -36,7 +36,7 @@ function isCalendarEvent(value: unknown): value is AcademicCalendarEvent {
 
 export async function loadAcademicCalendar(signal?: AbortSignal) {
   try {
-    const response = await fetch('/api/academic-calendar', { signal })
+    const response = await fetch(apiUrl('/api/academic-calendar'), { signal })
     if (!response.ok) throw new Error('학사일정을 불러오지 못했습니다.')
     const data = await response.json() as AcademicCalendarResponse
     const events = Array.isArray(data.events) ? data.events.filter(isCalendarEvent) : []
@@ -46,4 +46,6 @@ export async function loadAcademicCalendar(signal?: AbortSignal) {
     return fallbackEvents
   }
 }
+
+import { apiUrl } from '../../../shared/api/url'
 

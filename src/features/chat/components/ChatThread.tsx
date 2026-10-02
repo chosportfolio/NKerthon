@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import kuCharacter from '../../../assets/ku_character.png'
+import kuChatAvatar from '../../../assets/ku_chat_avatar.png'
 import type { ChatItem } from '../types/assistant'
 import { LinkGlyph } from './AssistantIcons'
 import ChatFeedback from './ChatFeedback'
@@ -37,7 +37,10 @@ function ChatThread({ items, pending, onRetry }: Props) {
         if (item.kind === 'user') {
           return (
             <div key={item.id} className="kubi-row kubi-row-user">
-              <p className="kubi-bubble kubi-bubble-user">{item.text}</p>
+              <div className="kubi-message kubi-message-user">
+                <p className="kubi-bubble kubi-bubble-user">{item.text}</p>
+                <time className="kubi-message-time">{item.time}</time>
+              </div>
             </div>
           )
         }
@@ -98,17 +101,20 @@ function ChatThread({ items, pending, onRetry }: Props) {
         return (
           <div key={item.id} className="kubi-row kubi-row-bot">
             {firstOfBotGroup
-              ? <img className="kubi-avatar" src={kuCharacter} alt="쿠비" />
+              ? <img className="kubi-avatar" src={kuChatAvatar} alt="AI 선배 쿠" />
               : <span className="kubi-avatar-space" />}
-            <div className="kubi-bubble kubi-bubble-bot">
-              <p><RichText text={item.text} /></p>
-              {item.links && item.links.length > 0 && (
-                <div className="kubi-links">
-                  {item.links.map((link) => (
-                    <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer">{link.text}</a>
-                  ))}
-                </div>
-              )}
+            <div className="kubi-message kubi-message-bot">
+              <div className="kubi-bubble kubi-bubble-bot">
+                <p><RichText text={item.text} /></p>
+                {item.links && item.links.length > 0 && (
+                  <div className="kubi-links">
+                    {item.links.map((link) => (
+                      <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer">{link.text}</a>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <time className="kubi-message-time">{item.time}</time>
             </div>
           </div>
         )
@@ -117,7 +123,7 @@ function ChatThread({ items, pending, onRetry }: Props) {
       {pending && (
         <div className="kubi-row kubi-row-bot">
           {items.at(-1)?.kind === 'user'
-            ? <img className="kubi-avatar" src={kuCharacter} alt="쿠비" />
+            ? <img className="kubi-avatar" src={kuChatAvatar} alt="AI 선배 쿠" />
             : <span className="kubi-avatar-space" />}
           <div className="kubi-bubble kubi-bubble-bot kubi-typing" aria-label="답변을 만드는 중">
             <span /><span /><span />

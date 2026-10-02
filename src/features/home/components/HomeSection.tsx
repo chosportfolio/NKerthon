@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import AppHeader from '../../../shared/components/AppHeader'
+import type { HeaderNotification } from '../../../shared/components/AppHeader'
 import { loadAcademicCalendar, type AcademicCalendarEvent } from '../api/academicCalendarApi'
 import { currentAcademicTerm } from '../../schedule/constants/academicTerms'
 import { loadScheduleCourses } from '../../schedule/utils/scheduleStorage'
 import { getCourseMeetings } from '../../schedule/utils/courseMeetings'
 import type { CourseDay, ScheduleCourse } from '../../schedule/types/schedule'
+import { PLACES } from '../../map/data/places'
+import { REPRESENTATIVE_MENUS } from '../../map/data/menus'
 import HomeBanner from './HomeBanner'
-import tlsIcon from '../../../assets/TLS.png'
-import academicSystemIcon from '../../../assets/AcademicInformationSystem.png'
-import courseRegistrationIcon from '../../../assets/CourseRegistration.png'
-import libraryIcon from '../../../assets/Library.png'
 
 type HomeSectionProps = {
   userId: number
@@ -22,13 +21,32 @@ type HomeSectionProps = {
 }
 
 const quickLinks = [
-  { icon: '🏫', label: '학교 홈페이지', color: 'amber', href: 'https://www.kku.ac.kr/index.do' },
-  { image: tlsIcon, label: 'TLS', color: 'blue', href: 'https://tls.kku.ac.kr/login.php' },
-  { image: academicSystemIcon, label: '학사정보', color: 'green', href: 'https://kis.kku.ac.kr/index.do' },
-  { image: courseRegistrationIcon, label: '수강신청', color: 'purple', href: 'https://kupis.kku.ac.kr/wsugang/' },
-  { image: libraryIcon, label: '중원도서관', color: 'blue', href: 'https://lib.kku.ac.kr/' },
-  { icon: '🚕', label: '택시팟', color: 'green' },
-]
+  { icon: 'brand', label: '학교 홈페이지', href: 'https://www.kku.ac.kr/index.do' },
+  { icon: 'tls', label: 'TLS', href: 'https://tls.kku.ac.kr/login.php' },
+  { icon: 'academic', label: '학사정보', href: 'https://kis.kku.ac.kr/index.do' },
+  { icon: 'course', label: '수강신청', href: 'https://kupis.kku.ac.kr/wsugang/' },
+  { icon: 'library', label: '중원도서관', href: 'https://lib.kku.ac.kr/' },
+  { icon: 'taxi', label: '택시팟', href: null },
+] as const
+
+type QuickLinkIconKind = (typeof quickLinks)[number]['icon']
+
+function QuickLinkIcon({ kind }: { kind: QuickLinkIconKind }) {
+  const paths: Record<QuickLinkIconKind, ReactNode> = {
+    brand: <><path d="m3 10 9-6 9 6" /><path d="M5 10v10h14V10M9 20v-6h6v6M3 20h18" /><path d="M8 10h8" /></>,
+    tls: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M8 22h8M12 19v3M10 9l5 3-5 3V9Z" /></>,
+    academic: <><path d="M7 3h8l4 4v14H7z" /><path d="M15 3v5h5M10 12h6M10 16h6" /></>,
+    course: <><rect x="4" y="3" width="16" height="18" rx="3" /><path d="M8 8h8M8 12h4M8 16h3M15 15l1.5 1.5L20 13" /></>,
+    library: <><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H12v18H7.5A3.5 3.5 0 0 0 4 23V5.5ZM20 5.5A3.5 3.5 0 0 0 16.5 2H12v18h4.5A3.5 3.5 0 0 1 20 23V5.5Z" /></>,
+    taxi: <><path d="m5 10 2-5h10l2 5M4 10h16v8H4z" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" /><path d="M9 5V3h6v2M7 13h.01M17 13h.01" /></>,
+  }
+
+  return (
+    <span className={`quick-link-icon ${kind}`} aria-hidden="true">
+      <svg viewBox="0 0 24 24">{paths[kind]}</svg>
+    </span>
+  )
+}
 
 const weekdayNumbers: Record<CourseDay, number> = { 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 }
 
@@ -120,6 +138,28 @@ function formatEventTitle(title: string) {
   return title.replace(/\s*\([^)]*(?:\([^)]*\)[^)]*)?\)\s*$/, '').trim()
 }
 
+function stableIndex(value: string, length: number) {
+  let hash = 0
+  for (const character of value) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0
+  return Math.abs(hash) % length
+}
+
+function getMealRecommendation(now: Date, userId: number) {
+  const hour = now.getHours()
+  const meal: 'lunch' | 'dinner' = hour >= 5 && hour < 17 ? 'lunch' : 'dinner'
+  const candidates = PLACES.filter((place) => {
+    if (!REPRESENTATIVE_MENUS[place.id]) return false
+    return meal === 'lunch' ? place.category === '밥집' : place.category === '밥집' || place.category === '술집'
+  })
+  const dateKey = `${userId}-${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-${meal}`
+  const place = candidates[stableIndex(dateKey, candidates.length)]
+  return {
+    label: meal === 'lunch' ? '점심 메뉴 추천' : '저녁 메뉴 추천',
+    place,
+    menu: place ? REPRESENTATIVE_MENUS[place.id] : '',
+  }
+}
+
 function HomeSection({
   userId,
   userName,
@@ -138,6 +178,29 @@ function HomeSection({
     () => getFeaturedCalendarEvent(calendarEvents, now),
     [calendarEvents, now],
   )
+  const mealRecommendation = useMemo(() => getMealRecommendation(now, userId), [now, userId])
+  const notifications = useMemo<HeaderNotification[]>(() => {
+    const items: HeaderNotification[] = []
+    if (nextCourse) {
+      items.push({
+        id: `course-${nextCourse.course.id}-${nextCourse.meeting.day}-${nextCourse.meeting.startTime}`,
+        kind: 'course',
+        title: `다음 수업 · ${nextCourse.course.name}`,
+        body: `${nextCourse.meeting.day}요일 ${nextCourse.meeting.startTime} · ${nextCourse.meeting.room || '강의실 미정'}`,
+        meta: formatCountdown(nextCourse.minutesUntil, nextCourse.inProgress, nextCourse.meeting.day),
+      })
+    }
+    if (featuredEvent) {
+      items.push({
+        id: `calendar-${featuredEvent.event.startDate}-${featuredEvent.event.title}`,
+        kind: 'calendar',
+        title: formatEventTitle(featuredEvent.event.title),
+        body: `학사일정 · ${formatEventPeriod(featuredEvent.event)}`,
+        meta: formatEventCountdown(featuredEvent.start, featuredEvent.end, now),
+      })
+    }
+    return items
+  }, [featuredEvent, nextCourse, now])
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000)
@@ -158,6 +221,7 @@ function HomeSection({
         userName={userName}
         profileImage={profileImage}
         onOpenProfile={onOpenProfile}
+        notifications={notifications}
       />
       <div className="home-dashboard">
       <button
@@ -212,14 +276,12 @@ function HomeSection({
       <section className="quick-links" aria-label="바로가기">
         {quickLinks.map((item) => item.href ? (
           <a href={item.href} target="_blank" rel="noopener noreferrer" key={item.label}>
-            <span className={`quick-link-icon ${item.color}`} aria-hidden="true">
-              {item.image ? <img src={item.image} alt="" /> : item.icon}
-            </span>
+            <QuickLinkIcon kind={item.icon} />
             <span>{item.label}</span>
           </a>
         ) : (
           <button type="button" key={item.label} onClick={onOpenTaxi}>
-            <span className={`quick-link-icon ${item.color}`} aria-hidden="true">{item.icon}</span>
+            <QuickLinkIcon kind={item.icon} />
             <span>{item.label}</span>
           </button>
         ))}
@@ -233,10 +295,10 @@ function HomeSection({
           </strong>
           <small>{featuredEvent ? formatEventPeriod(featuredEvent.event) : '일정을 불러오고 있어요'}</small>
         </article>
-        <article>
-          <span>오늘 점심 · 학생식당</span>
-          <strong>제육볶음</strong>
-          <small>된장국 · 계란말이</small>
+        <article className="meal-recommendation-card">
+          <span>{mealRecommendation.label} · 학교 주변</span>
+          <strong>{mealRecommendation.menu || '메뉴를 고르는 중'}</strong>
+          <small>{mealRecommendation.place ? `${mealRecommendation.place.name} · ${mealRecommendation.place.hours || '운영시간 확인 필요'}` : '지도 음식점 정보를 확인하고 있어요'}</small>
         </article>
       </section>
 
