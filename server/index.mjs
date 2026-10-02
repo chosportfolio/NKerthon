@@ -1,5 +1,5 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -44,6 +44,7 @@ mkdirSync(dataDirectory, { recursive: true })
 const database = new DatabaseSync(databasePath)
 database.exec(`
   PRAGMA journal_mode = WAL;
+  PRAGMA busy_timeout = 5000;
   PRAGMA foreign_keys = ON;
 
   CREATE TABLE IF NOT EXISTS users (
@@ -405,6 +406,37 @@ async function fetchAcademicCalendar() {
   return payload
 }
 
+// 로그인 실패가 반복되면 잠시 막아 비밀번호 대입을 어렵게 한다 (IP·아이디별, 메모리에만 보관)
+const LOGIN_WINDOW_MS = 15 * 60 * 1000
+const LOGIN_MAX_FAILURES = { id: 10, ip: 50 }          // 학교 와이파이는 여러 명이 같은 IP라 IP 기준은 넉넉히
+const loginFailures = new Map()
+
+function clientIp(request) {
+  // Railway 같은 호스팅은 프록시 뒤에서 실제 접속 주소를 X-Forwarded-For 첫 값으로 넘겨준다
+  const forwarded = String(request.headers['x-forwarded-for'] ?? '').split(',')[0].trim()
+  return forwarded || request.socket.remoteAddress || 'unknown'
+}
+
+function loginBlocked(key) {
+  const entry = loginFailures.get(key)
+  if (!entry) return false
+  if (Date.now() - entry.first > LOGIN_WINDOW_MS) {
+    loginFailures.delete(key)
+    return false
+  }
+  return entry.count >= LOGIN_MAX_FAILURES[key.startsWith('ip:') ? 'ip' : 'id']
+}
+
+function recordLoginFailure(key) {
+  const now = Date.now()
+  const entry = loginFailures.get(key)
+  if (!entry || now - entry.first > LOGIN_WINDOW_MS) loginFailures.set(key, { first: now, count: 1 })
+  else entry.count += 1
+  if (loginFailures.size > 10000) {                          // 오래된 기록 정리
+    for (const [k, v] of loginFailures) if (now - v.first > LOGIN_WINDOW_MS) loginFailures.delete(k)
+  }
+}
+
 async function handleApi(request, response, pathname) {
   if (request.method === 'GET' && pathname === '/api/health') {
     return sendJson(response, 200, { ok: true })
@@ -457,11 +489,19 @@ async function handleApi(request, response, pathname) {
     const body = await readJson(request)
     const loginId = String(body.loginId ?? '').trim()
     const password = String(body.password ?? '')
+    const ipKey = `ip:${clientIp(request)}`
+    const idKey = `id:${loginId.toLowerCase()}`
+    if (loginBlocked(ipKey) || loginBlocked(idKey)) {
+      return sendJson(response, 429, { message: '로그인 시도가 너무 많아요. 15분 뒤에 다시 시도해 주세요.' })
+    }
     const user = database.prepare('SELECT * FROM users WHERE login_id = ?').get(loginId)
 
     if (!user || !isPasswordValid(password, user.password_salt, user.password_hash)) {
+      recordLoginFailure(ipKey)
+      recordLoginFailure(idKey)
       return sendJson(response, 401, { message: '아이디 또는 비밀번호가 올바르지 않습니다.' })
     }
+    loginFailures.delete(idKey)
 
     database.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(new Date().toISOString())
     return sendJson(response, 200, { token: createSession(user.id), user: publicUser(user) })
@@ -988,6 +1028,61 @@ const server = createServer(async (request, response) => {
   }
 })
 
+// ---------------------------------------------------------------- DB 백업
+// 배포 서버에서는 DB를 하루 한 번(시작할 때도) 같은 볼륨의 backups/ 폴더에 통째로 복사해 둔다.
+// VACUUM INTO는 쓰는 중에도 일관된 스냅샷을 만들어, 백업 파일이 깨지지 않는다.
+const backupEnabled = process.env.DB_BACKUP === '1' || (process.env.NODE_ENV === 'production' && process.env.DB_BACKUP !== '0')
+const backupDirectory = path.join(dataDirectory, 'backups')
+const backupKeep = Math.max(1, Number(process.env.DB_BACKUP_KEEP) || 7)
+const backupIntervalMs = Math.max(1, Number(process.env.DB_BACKUP_INTERVAL_HOURS) || 24) * 60 * 60 * 1000
+
+function backupDatabase() {
+  try {
+    mkdirSync(backupDirectory, { recursive: true })
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const target = path.join(backupDirectory, `campus-${stamp}.db`)
+    database.exec(`VACUUM INTO '${target.replaceAll("'", "''")}'`)
+    const old = readdirSync(backupDirectory).filter((name) => /^campus-.*\.db$/.test(name)).sort().reverse()
+    for (const name of old.slice(backupKeep)) rmSync(path.join(backupDirectory, name), { force: true })
+    console.log(`[backup] ${path.basename(target)} (최근 ${backupKeep}개 보관)`)
+  } catch (error) {
+    console.error('[backup] 실패:', error.message)
+  }
+}
+
+// Railway는 볼륨을 붙이면 RAILWAY_VOLUME_MOUNT_PATH를 넣어 준다. 없으면 재배포 때 DB가 사라지므로 크게 경고
+if (process.env.RAILWAY_ENVIRONMENT && !process.env.RAILWAY_VOLUME_MOUNT_PATH) {
+  console.warn('[경고] Railway 볼륨이 연결되지 않았습니다. 재배포하면 회원·대화·택시 데이터가 모두 사라집니다. '
+    + `서비스 설정에서 볼륨을 ${dataDirectory} 에 연결하세요.`)
+}
+
+if (backupEnabled) {
+  backupDatabase()
+  setInterval(backupDatabase, backupIntervalMs).unref()
+}
+
 server.listen(port, () => {
   console.log(`Campus API server: http://localhost:${port}`)
 })
+
+// ---------------------------------------------------------------- 정상 종료
+// 재배포·재시작 때 요청을 마무리하고 DB 변경분(WAL)을 본 파일에 합친 뒤 닫는다.
+let shuttingDown = false
+function shutdown(signal) {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.log(`[server] ${signal} 받음 — 정리 후 종료`)
+  const finish = () => {
+    try {
+      database.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+      database.close()
+    } catch (error) {
+      console.error('[server] DB 닫기 실패:', error.message)
+    }
+    process.exit(0)
+  }
+  server.close(finish)
+  setTimeout(finish, 8000).unref()                    // 오래 걸리는 연결이 있어도 8초 안에는 끝냄
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))

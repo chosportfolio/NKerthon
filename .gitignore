@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 server/data/*.db*
+server/data/backups/
 
 # Secrets (API 키 등) — 절대 커밋하지 않음
 .env
