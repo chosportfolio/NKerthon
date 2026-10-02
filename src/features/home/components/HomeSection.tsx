@@ -3,7 +3,7 @@ import AppHeader from '../../../shared/components/AppHeader'
 import type { HeaderNotification } from '../../../shared/components/AppHeader'
 import { loadAcademicCalendar, type AcademicCalendarEvent } from '../api/academicCalendarApi'
 import { currentAcademicTerm } from '../../schedule/constants/academicTerms'
-import { loadScheduleCourses } from '../../schedule/utils/scheduleStorage'
+import { SCHEDULE_SYNCED_EVENT, loadScheduleCourses } from '../../schedule/utils/scheduleStorage'
 import { getCourseMeetings } from '../../schedule/utils/courseMeetings'
 import type { CourseDay, ScheduleCourse } from '../../schedule/types/schedule'
 import { PLACES } from '../../map/data/places'
@@ -171,7 +171,12 @@ function HomeSection({
 }: HomeSectionProps) {
   const [now, setNow] = useState(() => new Date())
   const [calendarEvents, setCalendarEvents] = useState<AcademicCalendarEvent[]>([])
-  const courses = useMemo(() => loadScheduleCourses(userId), [userId])
+  const [courses, setCourses] = useState(() => loadScheduleCourses(userId))
+  useEffect(() => {
+    const reload = () => setCourses(loadScheduleCourses(userId))     // 서버 시간표를 받아 오면 '다음 수업' 갱신
+    window.addEventListener(SCHEDULE_SYNCED_EVENT, reload)
+    return () => window.removeEventListener(SCHEDULE_SYNCED_EVENT, reload)
+  }, [userId])
   const upcomingCourses = useMemo(() => getUpcomingCourses(courses, now), [courses, now])
   const nextCourse = upcomingCourses[0]
   const featuredEvent = useMemo(

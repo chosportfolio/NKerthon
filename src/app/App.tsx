@@ -14,6 +14,7 @@ import {
 import type { User } from '../features/auth/types/auth'
 import type { AppTab } from '../shared/types/navigation'
 import { getGivenName } from '../shared/utils/name'
+import { syncScheduleFromServer } from '../features/schedule/utils/scheduleStorage'
 import '../styles/app.css'
 import '../features/auth/auth.css'
 import '../features/chat/chat.css'
@@ -69,6 +70,12 @@ function App() {
       .catch(() => clearAuthToken())
       .finally(() => setAuthReady(true))
   }, [])
+
+  // 로그인하면 서버에 저장된 시간표를 받아 온다 (다른 PC에서 저장한 시간표도 보이도록)
+  const userId = user?.id
+  useEffect(() => {
+    if (userId) void syncScheduleFromServer(userId)
+  }, [userId])
 
   const openAssistantWithPrompt = (prompt: string) => {
     setAssistantPrompt(prompt)

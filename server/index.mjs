@@ -97,6 +97,16 @@ database.exec(`
   );
 `)
 
+// 시간표는 계정별로 서버에 저장한다 (예전엔 브라우저에만 있어서 다른 PC에서 안 보였음)
+database.exec(`
+  CREATE TABLE IF NOT EXISTS user_schedules (
+    user_id INTEGER PRIMARY KEY,
+    courses TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`)
+
 database.exec(`
   CREATE TABLE IF NOT EXISTS chat_conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -730,6 +740,34 @@ async function handleApi(request, response, pathname) {
     return sendJson(response, 200, { parties: getTaxiParties(user.id) })
   }
 
+  if (pathname === '/api/schedule' && (request.method === 'GET' || request.method === 'PUT')) {
+    const user = getSessionUser(request)
+    if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
+
+    if (request.method === 'GET') {
+      const saved = database.prepare('SELECT courses, updated_at FROM user_schedules WHERE user_id = ?').get(user.id)
+      // 서버에 아직 없으면 null — 화면이 브라우저에 남아 있던 시간표를 올릴지 판단한다
+      return sendJson(response, 200, saved
+        ? { courses: JSON.parse(saved.courses), updatedAt: saved.updated_at }
+        : { courses: null, updatedAt: null })
+    }
+
+    const body = await readJson(request)
+    if (!Array.isArray(body.courses) || body.courses.length > 400) {
+      return sendJson(response, 400, { message: '시간표 형식이 올바르지 않습니다.' })
+    }
+    const courses = JSON.stringify(body.courses.filter((course) => course && typeof course === 'object'))
+    if (Buffer.byteLength(courses, 'utf8') > 500_000) {
+      return sendJson(response, 413, { message: '시간표 데이터가 너무 큽니다.' })
+    }
+    const updatedAt = new Date().toISOString()
+    database.prepare(`
+      INSERT INTO user_schedules (user_id, courses, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET courses = excluded.courses, updated_at = excluded.updated_at
+    `).run(user.id, courses, updatedAt)
+    return sendJson(response, 200, { updatedAt })
+  }
+
   if (request.method === 'GET' && pathname === '/api/chat/conversations') {
     const user = getSessionUser(request)
     if (!user) return sendJson(response, 401, { message: '로그인이 필요합니다.' })
@@ -996,7 +1034,7 @@ const server = createServer(async (request, response) => {
     response.setHeader('Access-Control-Allow-Origin', origin)
     response.setHeader('Vary', 'Origin')
     response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type')
-    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
   }
   response.setHeader('X-Content-Type-Options', 'nosniff')
   response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
