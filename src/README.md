@@ -9,13 +9,18 @@ src/
 ├─ assets/              # shared static images
 ├─ features/
 │  ├─ auth/             # login, signup, account API and types
-│  ├─ chat/             # AI assistant UI and conversation logic
-│  ├─ home/             # home dashboard
-│  ├─ map/              # campus map section
-│  └─ schedule/         # timetable, course catalog and graduation tools
-├─ shared/              # reusable layout components and utilities
+│  ├─ home/             # home dashboard (next class, academic calendar)
+│  ├─ chat/             # AI 선배: chat UI, feedback, conversation history
+│  │                    #   data/ + constants/chatCopy.ts = keyword menu shown when the chatbot server is down
+│  ├─ schedule/         # timetable (synced to the server), course catalog, graduation progress
+│  ├─ map/              # campus map, nearby places, edit suggestions
+│  └─ taxi/             # taxi party posts and chat
+├─ shared/              # reusable layout components, API base URL, utilities
 └─ styles/              # application-wide shell styles
 ```
+
+Inside a feature, files are grouped by role: `api/`, `components/`, `constants/`,
+`data/`, `hooks/`, `services/`, `types/`, `utils/`, plus one feature stylesheet.
 
 ## Dependency rules
 
