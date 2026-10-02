@@ -21,6 +21,16 @@ type AssistantSectionProps = {
   studentNumber?: string
 }
 
+const COMPOUND_SURNAMES = ['남궁', '황보', '제갈', '선우', '독고', '사공', '서문', '동방', '어금']
+
+/** 인사말용 이름: 한글 이름이면 성을 뺀다 ("김영현" → "영현", "남궁민수" → "민수") */
+function givenName(name: string) {
+  const trimmed = name.trim()
+  if (!/^[가-힣]{2,5}$/.test(trimmed)) return trimmed
+  const surname = COMPOUND_SURNAMES.find((s) => trimmed.length >= 4 && trimmed.startsWith(s)) ?? trimmed[0]
+  return trimmed.slice(surname.length)
+}
+
 function HistoryGlyph() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -163,7 +173,7 @@ function AssistantSection({ initialPrompt, userId, userName = '', department = '
         </button>
         <div className="kubi-hello">
           <img src={kuHappyCharacter} alt="활짝 웃는 건국대학교 캐릭터 쿠" />
-          <h2>{userName ? `${userName}아, 궁금한 건 선배한테 물어봐!` : '궁금한 건 선배한테 물어봐!'}</h2>
+          <h2>{userName ? `${givenName(userName)}, 궁금한 건 선배한테 물어봐!` : '궁금한 건 선배한테 물어봐!'}</h2>
           <p>수업부터 장학금, 학교생활까지<br />선배가 학교 자료를 찾아 꼼꼼히 알려줄게.</p>
         </div>
         <div className="kubi-dock">

@@ -86,10 +86,10 @@
 .cm-place-footer b { font-size: 15px; }
 .cm-pending { display: block; margin-top: 6px; color: #946d2b; font-size: 10px; }
 
-.cm-detail[aria-label="장소 상세 정보"] { position: absolute; right: 12px; bottom: 44px; left: 12px; z-index: 10; max-height: 275px; padding: 18px; overflow-y: auto; border: 1px solid rgb(221 231 224 / 94%); border-radius: 21px; background: rgb(255 255 255 / 95%); box-shadow: 0 18px 40px rgb(22 55 32 / 20%); backdrop-filter: blur(16px); box-sizing: border-box; }
-.cm-detail h3 { margin: 8px 34px 12px 0; color: #203b29; font-size: 20px; letter-spacing: -.04em; }
-.cm-close { position: absolute; top: 12px; right: 12px; display: grid; width: 32px; height: 32px; padding: 0; place-items: center; border: 0; border-radius: 50%; color: #53695c; background: #eff4f1; font-size: 23px !important; line-height: 1; }
-.cm-detail dl { display: grid; margin: 14px 0; grid-template-columns: 58px minmax(0, 1fr); gap: 9px; font-size: 11px; line-height: 1.55; }
+.cm-detail[aria-label="장소 상세 정보"] { position: absolute; right: 12px; bottom: 44px; left: 64px; z-index: 10; max-height: calc(100% - 56px); padding: 12px 14px; overflow-y: auto; border: 1px solid rgb(221 231 224 / 94%); border-radius: 21px; background: rgb(255 255 255 / 95%); box-shadow: 0 18px 40px rgb(22 55 32 / 20%); backdrop-filter: blur(16px); box-sizing: border-box; }
+.cm-detail h3 { margin: 5px 32px 6px 0; color: #203b29; font-size: 17px; letter-spacing: -.04em; }
+.cm-close { position: absolute; top: 10px; right: 10px; display: grid; width: 26px; height: 26px; padding: 0; place-items: center; border: 0; border-radius: 50%; color: #53695c; background: #eff4f1; font-size: 19px !important; line-height: 1; }
+.cm-detail dl { display: grid; margin: 6px 0; grid-template-columns: 50px minmax(0, 1fr); gap: 3px 8px; font-size: 11px; line-height: 1.45; }
 .cm-detail dt { color: #859088; }
 .cm-detail dd { margin: 0; color: #354a3c; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cm-detail a { color: var(--cm-green); }
@@ -105,11 +105,14 @@
 .cm-marker.is-active { width: 30px; height: 40px; }
 .cm-marker svg { filter: drop-shadow(0 4px 7px rgb(16 70 34 / 28%)); pointer-events: none; }
 
-.cm-menu { display: grid; margin: 13px 0 10px; padding: 12px; gap: 5px; border-radius: 12px; background: #f0f7f2; overflow-wrap: anywhere; }
+.cm-menu { display: flex; margin: 6px 0; padding: 6px 10px; align-items: baseline; gap: 8px; border-radius: 9px; background: #f0f7f2; overflow-wrap: anywhere; }
 .cm-menu span { color: var(--cm-green); font-size: 10px; font-weight: 800; }
-.cm-menu strong { color: #253e2e; font-size: 13px; line-height: 1.55; }
-.cm-suggestion { margin-top: 13px; padding-top: 11px; border-top: 1px solid var(--cm-border); }
-.cm-suggest-button { width: 100%; padding: 9px; border: 1px solid #d9e6dd; border-radius: 10px; color: var(--cm-green); background: #f5faf7; font-size: 11px !important; font-weight: 700; }
+.cm-menu span { flex: 0 0 auto; }
+.cm-menu strong { color: #253e2e; font-size: 12px; line-height: 1.4; }
+/* 정보창이 스크롤 없이 한 번에 보이도록: 제안 버튼과 제보 확인을 한 줄에 */
+.cm-suggestion { display: flex; margin-top: 7px; padding-top: 7px; align-items: center; flex-wrap: wrap; gap: 6px 12px; border-top: 1px solid var(--cm-border); }
+.cm-suggestion > :not(button) { flex-basis: 100%; }
+.cm-suggest-button { padding: 5px 10px; border: 1px solid #d9e6dd; border-radius: 10px; color: var(--cm-green); background: #f5faf7; font-size: 11px !important; font-weight: 700; }
 .cm-suggest-form { display: grid; margin-top: 12px; gap: 9px; color: #364e3f; font-size: 11px; }
 .cm-suggest-form label { display: grid; gap: 5px; }
 .cm-suggest-form select,
@@ -121,7 +124,7 @@
 .cm-suggest-actions { display: flex; gap: 7px; }
 .cm-suggest-actions button { padding: 8px; flex: 1; border: 1px solid var(--cm-border); border-radius: 8px; color: #53695c; background: white; }
 .cm-suggest-actions button[type=submit] { border-color: var(--cm-green); color: white; background: var(--cm-green); }
-.cm-report-history-button { margin-top: 9px; padding: 0; border: 0; color: #758278; background: transparent; font-size: 9px !important; text-decoration: underline; }
+.cm-report-history-button { margin-top: 0; padding: 0; border: 0; color: #758278; background: transparent; font-size: 9px !important; text-decoration: underline; }
 .cm-report-history { margin-top: 10px; font-size: 10px; overflow-wrap: anywhere; }
 .cm-report-history article { margin-top: 9px; padding: 10px 0; border-top: 1px solid var(--cm-border); }
 .cm-report-history p { margin: 4px 0; white-space: pre-wrap; }
@@ -136,7 +139,7 @@
   .cm-map-wrap { height: min(340px, 45svh); border-radius: 21px; }
   .cm-results { padding: 13px; border-radius: 19px; }
   .cm-list { grid-auto-columns: minmax(190px, 79%); }
-  .cm-detail[aria-label="장소 상세 정보"] { right: 9px; bottom: 43px; left: 9px; max-height: 245px; padding: 15px; border-radius: 18px; }
+  .cm-detail[aria-label="장소 상세 정보"] { right: 9px; bottom: 43px; left: 56px; max-height: calc(100% - 52px); padding: 10px 12px; border-radius: 18px; }
 }
 
 @media (max-height: 700px) and (hover: none), (max-height: 700px) and (pointer: coarse) {
