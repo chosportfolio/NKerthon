@@ -28,6 +28,15 @@ function BottomNavigation({ activeTab, onTabChange }: BottomNavigationProps) {
           <span>시간표</span>
         </button>
 
+        <button className={`nav-item${activeTab === 'taxi' ? ' is-active' : ''}`} type="button" onClick={() => onTabChange('taxi')} aria-label="택시팟">
+          <span className="nav-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m5 11 2-5h10l2 5M4 11h16v7H4zM7 18v2M17 18v2M7.5 14.5h.01M16.5 14.5h.01" />
+            </svg>
+          </span>
+          <span>택시팟</span>
+        </button>
+
         <button className={`nav-item nav-chatbot${activeTab === 'assistant' ? ' is-active' : ''}`} type="button" onClick={() => onTabChange('assistant')} aria-label="AI 선배">
           <span className="nav-icon">
             <svg viewBox="0 0 24 24" aria-hidden="true">

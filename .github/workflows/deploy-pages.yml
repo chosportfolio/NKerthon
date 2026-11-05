@@ -1,0 +1,59 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [chs]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check required deployment settings
+        env:
+          NAVER_MAP_KEY: ${{ secrets.VITE_NAVER_MAP_KEY }}
+          API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+        run: |
+          test -n "$NAVER_MAP_KEY" || { echo "VITE_NAVER_MAP_KEY secret is missing"; exit 1; }
+          test -n "$API_BASE_URL" || { echo "VITE_API_BASE_URL variable is missing"; exit 1; }
+      - name: Build
+        env:
+          VITE_BASE_PATH: /NKerthon/
+          VITE_NAVER_MAP_KEY: ${{ secrets.VITE_NAVER_MAP_KEY }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+        run: npm run build
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

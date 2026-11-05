@@ -1,75 +1,118 @@
-# React + TypeScript + Vite
+# KUSTOM
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+건국대학교 글로컬캠퍼스 학생을 위한 캠퍼스 앱입니다.
+2026 제1회 컴퓨터공학과 해커톤 **L/NKerthon** 프로젝트로 만들었습니다.
 
-Currently, two official plugins are available:
+학교생활에 필요한 정보는 많은데, 막상 찾으려면 학교 홈페이지, 학사정보시스템, 학사요람을 따로 확인해야 합니다. 시간표를 짜고 졸업요건을 확인하거나 학교 주변 정보를 찾는 일을 한곳에서 해결할 수 있으면 좋겠다는 생각으로 시작했습니다.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+KUSTOM에서는 내 시간표와 졸업이수현황을 확인하고, 궁금한 내용은 AI 선배에게 물어볼 수 있습니다. 학과와 입학연도에 따라 달라지는 정보도 내 계정에 맞춰 확인할 수 있도록 구성했습니다.
 
-## React Compiler
+> 현재 전체 기능이 구현된 코드는 `kyh` 브랜치에 있습니다. 아래 실행 방법도 `kyh` 브랜치 기준입니다.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 주요 기능
 
-## Expanding the ESLint configuration
+| 메뉴 | 할 수 있는 일 |
+| --- | --- |
+| 홈 | 다음 수업, 학사일정 D-day, 시간대별 음식점 추천, 학교 서비스 바로가기 |
+| 시간표 | 학기별 강의 검색·추가·수정·삭제, 학점계산기, 졸업이수현황 확인 |
+| AI 선배 | 학교 자료를 바탕으로 질문에 답변, 근거 자료 확인, 지난 대화 저장·삭제 |
+| 지도 | 네이버 지도에서 교내 건물과 학교 주변 음식점·시설 확인 |
+| 택시팟 | 같은 방향으로 가는 사람 모집, 팟 참여, 참여자 간 채팅 |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+로그인과 회원가입, 자동 로그인, 계정별 프로필 이미지 변경도 지원합니다.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### 시간표와 졸업이수현황
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+2017년 1학기부터 2026년 2학기까지의 강의시간표를 넣었습니다. 강의를 선택하면 교수님, 강의실, 요일과 시간이 자동으로 입력되고, 월요일·수요일처럼 여러 날에 나뉜 수업도 한 번에 추가됩니다. 시간이 겹치는 수업은 중복을 확인하고, 시간이 정해져 있지 않은 사이버 강의는 표 아래에 따로 표시합니다. 직접 과목을 입력하는 방식도 남겨뒀습니다.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+시간표는 계정별·학기별로 저장합니다. 성적은 시간표에 수업을 추가할 때가 아니라 학점계산기에서 입력하고, 졸업이수현황은 학과와 입학연도에 맞는 기준으로 전공·교양 이수학점과 필수과목을 확인하도록 만들었습니다.
 
+### AI 선배
+
+답변을 생성하기 전에 학교 홈페이지, 공지사항, 학사일정, 학사요람에서 관련 자료를 찾아 전달하는 RAG 방식입니다. 키워드 검색과 임베딩 검색을 함께 사용하고, 답변에 사용한 근거 자료도 보여줍니다.
+
+로그인한 사용자의 학과·입학연도와 이번 학기 시간표를 함께 전달해서 질문에 맞는 정보를 찾도록 했습니다. 대화 기록은 계정별로 다시 확인하거나 삭제할 수 있습니다.
+
+## 사용 기술
+
+| 구분 | 기술 |
+| --- | --- |
+| 화면 | React, TypeScript, Vite |
+| API 서버·DB | Node.js, SQLite |
+| 챗봇 서버 | Python, FastAPI, OpenAI API |
+| 자료 검색·수집 | NumPy, BM25 키워드 검색, 임베딩 검색, BeautifulSoup, PyPDF |
+| 지도 | 네이버 지도 JavaScript API |
+
+## 폴더 구조
+
+```text
+KUSTOM/
+├─ src/
+│  ├─ app/              앱 구성과 탭 전환
+│  ├─ features/
+│  │  ├─ auth/          로그인·회원가입
+│  │  ├─ home/          홈 화면
+│  │  ├─ schedule/      시간표·학점계산기·졸업이수현황
+│  │  ├─ chat/          AI 선배
+│  │  ├─ map/           지도
+│  │  └─ taxi/          택시팟
+│  ├─ shared/           공통 컴포넌트·API 설정·유틸
+│  ├─ styles/           전체 화면 스타일
+│  └─ assets/           이미지
+├─ public/course-catalog/  학기별 강의 데이터
+├─ server/                Node.js API 서버와 DB 처리
+├─ chatbot/               RAG 챗봇·자료 수집·평가 도구
+└─ scripts/               개발 실행·데이터 변환 스크립트
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+기능별로 화면, API 호출, 타입, 로직을 나눠 관리했습니다. 자세한 내용은 [프론트엔드 구조](https://github.com/chosportfolio/NKerthon/blob/kyh/src/README.md)와 [챗봇 설명](https://github.com/chosportfolio/NKerthon/blob/kyh/chatbot/README.md)에 정리돼 있습니다.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 로컬 실행
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Node.js 24와 Python 3.11 이상을 기준으로 준비하면 됩니다. Python은 가상환경 사용을 권장합니다.
 
+### 1. 코드 받기
+
+```bash
+git clone --branch kyh https://github.com/chosportfolio/NKerthon.git
+cd NKerthon
+npm install
+python -m pip install -r chatbot/requirements.txt
 ```
+
+### 2. 환경변수 설정
+
+프로젝트의 `.env.example`을 `.env.local`로, `chatbot/.env.example`을 `chatbot/.env`로 복사한 뒤 필요한 값을 입력합니다.
+
+| 파일 | 설정 |
+| --- | --- |
+| `.env.local` | `VITE_NAVER_MAP_KEY`: 네이버 지도 Client ID |
+| `chatbot/.env` | `OPENAI_API_KEY`: AI 답변에 사용할 API 키 |
+| `chatbot/.env` | `OPENAI_BASE_URL`, `CHAT_MODEL`, `EMBED_MODEL`: API 주소와 사용할 모델 |
+
+API 키는 저장소에 포함하지 않았습니다. AI 답변을 사용하려면 실행하는 사람이 별도로 키를 설정해야 합니다. 검색에 필요한 데이터와 색인 구성은 [챗봇 설명](https://github.com/chosportfolio/NKerthon/blob/kyh/chatbot/README.md)을 참고하면 됩니다.
+
+네이버 지도는 콘솔의 Web 서비스 URL에 `http://localhost:5173`을 등록해야 합니다. 환경변수를 수정한 뒤에는 개발 서버를 다시 실행해야 반영됩니다.
+
+### 3. 실행
+
+```bash
+npm run dev
+```
+
+브라우저에서 `http://localhost:5173`으로 접속합니다. 화면은 `5173`, API 서버는 `5174`, 챗봇 서버는 `8000` 포트를 사용합니다. 챗봇이 실행되지 않아도 나머지 앱 기능은 사용할 수 있습니다.
+
+Python 경로를 찾지 못하면 `CHATBOT_PYTHON` 환경변수에 실행 파일 경로를 지정하면 됩니다.
+
+### 코드 검사·빌드
+
+```bash
+npm run lint
+npm run build
+```
+
+## 실행 전 참고
+
+현재 공개 운영 중인 배포 주소는 없습니다. 저장소를 내려받아 로컬에서 실행할 수 있습니다.
+
+졸업요건과 학사일정은 수집한 학교 자료를 기준으로 합니다. 입학연도·학과별 예외나 변경사항이 있을 수 있어서, 졸업과 수강신청처럼 중요한 내용은 학교 공지와 학사지원팀 안내를 함께 확인하는 것을 권장합니다.

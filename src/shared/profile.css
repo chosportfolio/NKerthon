@@ -1,5 +1,5 @@
 .profile-overlay {
-  position: fixed;
+  position: absolute;
   top: 0;
   bottom: 0;
   left: 50%;
@@ -179,12 +179,12 @@
   from { background: transparent; }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 520px) and (hover: none), (max-width: 520px) and (pointer: coarse) {
   .profile-sidebar { width: min(88%, 330px); padding: 20px; }
   .profile-card { margin-top: 32px; }
 }
 
-@media (max-width: 400px) {
+@media (max-width: 400px) and (hover: none), (max-width: 400px) and (pointer: coarse) {
   .profile-sidebar { width: 91%; padding: 17px; }
   .profile-card { margin-top: 25px; }
   .profile-avatar-large { width: 88px; height: 88px; }

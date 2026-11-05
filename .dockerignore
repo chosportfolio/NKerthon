@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+node_modules
+dist
+server/data/*.db*
+chatbot/__pycache__
+chatbot/**/*.pyc
+chatbot/kku_data/files/yoram/*.pdf
+chatbot/kku_data/files/yoram/*.pages.json
+chatbot/kku_data/ablation
+chatbot/eval/results

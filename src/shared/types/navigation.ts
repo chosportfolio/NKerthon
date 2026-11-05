@@ -1,1 +1,1 @@
-export type AppTab = 'home' | 'schedule' | 'assistant' | 'map'
+export type AppTab = 'home' | 'taxi' | 'schedule' | 'assistant' | 'map'

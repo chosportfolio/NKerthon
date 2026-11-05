@@ -210,14 +210,14 @@
   font-weight: 700;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 520px) and (hover: none), (max-width: 520px) and (pointer: coarse) {
   .auth-page { padding: 18px 14px; }
   .auth-panel { padding: 28px 22px; border-radius: 24px; }
   .auth-heading h1 { font-size: 25px; }
   .auth-field-grid { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 400px) {
+@media (max-width: 400px) and (hover: none), (max-width: 400px) and (pointer: coarse) {
   .auth-page { padding: 12px; align-items: start; }
   .auth-panel { margin: 8px 0; padding: 24px 18px; border-radius: 21px; }
   .auth-brand { width: 44px; height: 44px; margin-bottom: 18px; border-radius: 14px; }

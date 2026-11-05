@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import CourseFormModal from './CourseFormModal'
 import GradeCalculator from './GradeCalculator'
 import { academicTerms, currentAcademicTerm, formatAcademicTerm } from '../constants/academicTerms'
-import { getScheduleStorageKey, loadScheduleCourses } from '../utils/scheduleStorage'
+import { SCHEDULE_SYNCED_EVENT, loadScheduleCourses, saveScheduleCourses } from '../utils/scheduleStorage'
 import { getCourseMeetings } from '../utils/courseMeetings'
 import type { AcademicTerm, CourseDay, CourseGrade, ScheduleCourse } from '../types/schedule'
 import type { CatalogSemester } from '../types/courseCatalog'
@@ -36,15 +36,21 @@ function calculateGpa(courses: ScheduleCourse[]) {
 }
 
 function ScheduleSection({ userId, department, studentNumber }: ScheduleSectionProps) {
-  const storageKey = getScheduleStorageKey(userId)
   const [courses, setCourses] = useState<ScheduleCourse[]>(() => loadScheduleCourses(userId))
   const [selectedTerm, setSelectedTerm] = useState<AcademicTerm>(currentAcademicTerm)
   const [modal, setModal] = useState<'course' | 'calculator' | null>(null)
   const [editingCourse, setEditingCourse] = useState<ScheduleCourse | undefined>()
 
+  // 서버에서 시간표를 받아 오면(다른 PC에서 저장한 내용) 화면을 다시 그린다
   useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(courses))
-  }, [courses, storageKey])
+    const reload = () => setCourses(loadScheduleCourses(userId))
+    window.addEventListener(SCHEDULE_SYNCED_EVENT, reload)
+    return () => window.removeEventListener(SCHEDULE_SYNCED_EVENT, reload)
+  }, [userId])
+
+  useEffect(() => {
+    saveScheduleCourses(userId, courses)
+  }, [courses, userId])
 
   useEffect(() => {
     const missingAreas = courses.filter((course) => course.category === 'liberal' && !course.liberalArea && course.catalogId && course.sourceSemester)

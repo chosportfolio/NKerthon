@@ -3,6 +3,7 @@ import AssistantSection from '../features/chat/components/AssistantSection'
 import HomeSection from '../features/home/components/HomeSection'
 import MapSection from '../features/map/components/MapSection'
 import ScheduleSection from '../features/schedule/components/ScheduleSection'
+import TaxiPartySection from '../features/taxi/components/TaxiPartySection'
 
 type MainSectionProps = {
   activeTab: AppTab
@@ -15,6 +16,8 @@ type MainSectionProps = {
   suggestedQuestion: string
   assistantPrompt: string | null
   onOpenAssistant: (prompt: string) => void
+  onOpenTaxi: () => void
+  onCloseTaxi: () => void
 }
 
 function MainSection({
@@ -28,6 +31,8 @@ function MainSection({
   suggestedQuestion,
   assistantPrompt,
   onOpenAssistant,
+  onOpenTaxi,
+  onCloseTaxi,
 }: MainSectionProps) {
   return (
     <main className={`app-section app-section-${activeTab}`}>
@@ -39,12 +44,22 @@ function MainSection({
           onOpenProfile={onOpenProfile}
           suggestedQuestion={suggestedQuestion}
           onOpenAssistant={onOpenAssistant}
+          onOpenTaxi={onOpenTaxi}
         />
       )}
+      {activeTab === 'taxi' && <TaxiPartySection onBack={onCloseTaxi} />}
       {activeTab === 'schedule' && (
         <ScheduleSection userId={userId} department={department} studentNumber={studentNumber} />
       )}
-      {activeTab === 'assistant' && <AssistantSection initialPrompt={assistantPrompt} />}
+      {activeTab === 'assistant' && (
+        <AssistantSection
+          initialPrompt={assistantPrompt}
+          userId={userId}
+          userName={userName}
+          department={department}
+          studentNumber={studentNumber}
+        />
+      )}
       {activeTab === 'map' && <MapSection />}
     </main>
   )

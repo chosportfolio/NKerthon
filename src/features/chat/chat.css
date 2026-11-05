@@ -406,7 +406,7 @@ body {
    반응형
 ========================= */
 
-@media (max-width: 700px) {
+@media (max-width: 700px) and (hover: none), (max-width: 700px) and (pointer: coarse) {
     .chat-composer {
         padding: 10px 12px 12px;
     }
@@ -460,7 +460,7 @@ body {
     }
 }
 
-@media (max-width: 400px) {
+@media (max-width: 400px) and (hover: none), (max-width: 400px) and (pointer: coarse) {
     .chat-composer { padding: 8px 9px 9px; }
     .composer-form { min-height: 46px; padding-left: 13px; }
     .composer-form input { font-size: 16px; }

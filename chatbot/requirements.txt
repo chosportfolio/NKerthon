@@ -1,0 +1,11 @@
+requests>=2.28
+beautifulsoup4>=4.12
+lxml>=4.9
+pypdf>=4.0        # 학사요람·페이지 PDF 본문 추출
+numpy>=1.24       # 임베딩 벡터 검색
+openpyxl>=3.1     # 평가 질문·졸업요건 엑셀 읽기/쓰기
+fastapi>=0.110    # 앱 연동용 API 서버 (app_server.py)
+uvicorn>=0.29
+kiwipiepy>=0.17   # 선택: 키워드(명사) 추출 품질 향상. 없거나 보안 정책에 막히면 간이 추출로 동작
+truststore>=0.9   # 선택: SSL 인증서 오류 시 OS 인증서 저장소 사용
+# pyhwp           # 선택: HWP 첨부 본문 추출(hwp5txt). 설치가 안 되면 생략해도 됨

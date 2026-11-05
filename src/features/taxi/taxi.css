@@ -1,0 +1,119 @@
+.taxi-section { min-height: 100%; background: #f6f8f7; }
+
+.taxi-page-header {
+  position: sticky; top: 0; z-index: 5; display: grid; min-height: 92px; padding: 16px 26px;
+  grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; border-bottom: 1px solid #e7ebe8;
+  background: rgb(255 255 255 / 94%); backdrop-filter: blur(18px); box-sizing: border-box;
+}
+
+.taxi-page-header > button:first-child {
+  width: 42px; height: 42px; padding: 0; border: 0; border-radius: 14px; color: #26312b;
+  background: #f2f5f3; font-size: 24px; cursor: pointer;
+}
+
+.taxi-page-header span { color: #8a938e; font-size: 12px; }
+.taxi-page-header h1 { margin: 3px 0 0; font-size: 24px; letter-spacing: -0.04em; }
+.taxi-create-button { padding: 11px 15px; border: 0; border-radius: 14px; color: #fff; background: var(--app-green); font-size: 13px; font-weight: 800; cursor: pointer; }
+.taxi-content, .taxi-create-form { display: flex; padding: 22px 26px 40px; flex-direction: column; gap: 18px; }
+.taxi-hero { display: flex; padding: 20px; align-items: center; gap: 15px; border-radius: 22px; color: #075d23; background: linear-gradient(135deg, #ddf4df, #eff9ed); }
+.taxi-hero > span { display: grid; width: 52px; height: 52px; flex: 0 0 auto; place-items: center; border-radius: 17px; background: #fff; font-size: 26px; }
+.taxi-hero div { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
+.taxi-hero strong { font-size: 16px; }
+.taxi-hero small { color: #588063; font-size: 13px; }
+.taxi-filters { display: flex; gap: 8px; }
+.taxi-filters button { padding: 10px 16px; border: 1px solid #dfe5e1; border-radius: 999px; color: #68716c; background: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+.taxi-filters button.is-active { border-color: #173c24; color: #fff; background: #173c24; }
+.taxi-party-list { display: flex; flex-direction: column; gap: 13px; }
+.taxi-party-card { padding: 20px; border: 1px solid #e1e7e3; border-radius: 22px; background: #fff; box-shadow: 0 8px 24px rgb(26 55 39 / 5%); }
+.taxi-party-card.is-joined { border-color: #9bd3a6; }
+.taxi-card-top, .taxi-card-meta, .taxi-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.taxi-card-top time { color: #15271c; font-size: 16px; font-weight: 800; }
+.taxi-status { padding: 6px 9px; border-radius: 999px; color: #13762e; background: #e7f7e9; font-size: 11px; font-weight: 800; }
+.taxi-status.full, .taxi-status.closed { color: #737b76; background: #eef0ef; }
+.taxi-route { display: grid; margin: 18px 0; grid-template-columns: 12px 1fr; gap: 12px; }
+.taxi-route > span { position: relative; width: 2px; height: 48px; margin: 5px auto; background: #c8d4cc; }
+.taxi-route > span::before, .taxi-route > span::after { position: absolute; left: 50%; width: 9px; height: 9px; border: 2px solid #fff; border-radius: 50%; background: var(--app-green); box-shadow: 0 0 0 1px var(--app-green); content: ''; transform: translateX(-50%); }
+.taxi-route > span::before { top: 0; }
+.taxi-route > span::after { bottom: 0; background: #f09c28; box-shadow: 0 0 0 1px #f09c28; }
+.taxi-route div { display: grid; grid-template-columns: 1fr auto; gap: 8px 10px; }
+.taxi-route strong { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.taxi-route small { color: #99a09c; font-size: 11px; }
+.taxi-party-card > p { margin: 0 0 16px; padding: 12px 14px; border-radius: 13px; color: #5e6862; background: #f6f8f7; font-size: 13px; }
+.taxi-card-meta { padding-top: 14px; border-top: 1px solid #edf0ee; color: #89918d; font-size: 12px; }
+.taxi-card-meta strong { color: #344139; font-size: 13px; }
+.taxi-card-actions { margin-top: 15px; flex-wrap: wrap; justify-content: flex-end; }
+.taxi-card-actions button { padding: 10px 14px; border: 0; border-radius: 12px; color: #5c6660; background: #eef2ef; font-size: 12px; font-weight: 800; cursor: pointer; }
+.taxi-card-actions button.is-primary { width: 100%; color: #fff; background: var(--app-green); }
+.taxi-card-actions button.is-chat { color: #fff; background: #173c24; }
+.taxi-card-actions button.is-danger { color: #aa3f3f; background: #fff0f0; }
+.taxi-card-actions button:disabled { cursor: default; opacity: 0.5; }
+.taxi-empty { display: flex; min-height: 210px; padding: 30px; align-items: center; justify-content: center; flex-direction: column; gap: 8px; border: 1px dashed #dce3df; border-radius: 22px; color: #87908b; background: #fff; text-align: center; }
+.taxi-empty > span { font-size: 32px; }
+.taxi-empty strong { color: #465049; }
+.taxi-empty small { font-size: 12px; }
+.taxi-error { margin: 0; padding: 11px 13px; border-radius: 12px; color: #a32d2d; background: #fff0f0; font-size: 12px; }
+.taxi-create-form { max-width: 560px; margin: 0 auto; }
+.taxi-form-guide { display: flex; padding: 18px; flex-direction: column; gap: 5px; border-radius: 18px; background: #eaf6ec; }
+.taxi-form-guide strong { color: #145b28; font-size: 16px; }
+.taxi-form-guide span { color: #66806d; font-size: 12px; }
+.taxi-create-form label, .taxi-create-form fieldset { position: relative; display: flex; margin: 0; padding: 0; flex-direction: column; gap: 8px; border: 0; color: #445049; font-size: 13px; font-weight: 800; }
+.taxi-create-form input, .taxi-create-form select, .taxi-create-form textarea { width: 100%; min-height: 54px; padding: 14px 16px; border: 1px solid #dce3df; border-radius: 14px; outline: 0; color: #1f2722; background: #fff; box-sizing: border-box; font-size: 16px; }
+.taxi-create-form input:focus, .taxi-create-form select:focus, .taxi-create-form textarea:focus { border-color: #49a960; box-shadow: 0 0 0 4px rgb(0 131 31 / 10%); }
+.taxi-create-form input[type='datetime-local'] { cursor: pointer; }
+.taxi-create-form input[type='datetime-local']::-webkit-calendar-picker-indicator { width: 26px; height: 26px; margin: -7px; padding: 7px; cursor: pointer; }
+.taxi-create-form select {
+  padding-right: 46px;
+  border-radius: 12px;
+  background-color: #fff;
+  font-weight: 700;
+  appearance: auto;
+  cursor: pointer;
+}
+.taxi-create-form .taxi-custom-place { margin-top: 2px; border-style: dashed; background: #fafcfb; }
+.taxi-create-form textarea { min-height: 88px; resize: vertical; }
+.taxi-create-form label > small { position: absolute; right: 10px; bottom: 8px; color: #9ba19d; font-size: 10px; font-weight: 400; }
+.taxi-capacity-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.taxi-capacity-options button { min-height: 54px; padding: 13px; border: 1px solid #dce3df; border-radius: 13px; color: #66706a; background: #fff; font-size: 15px; cursor: pointer; touch-action: manipulation; }
+.taxi-capacity-options button.is-selected { border-color: var(--app-green); color: var(--app-green); background: #edf8ef; font-weight: 800; }
+.taxi-primary-button { padding: 15px; border: 0; border-radius: 15px; color: #fff; background: var(--app-green); font-weight: 800; cursor: pointer; }
+.taxi-primary-button:disabled { opacity: 0.6; }
+
+.taxi-chat-view { display: flex; height: 100%; min-height: 0; flex-direction: column; overflow: hidden; }
+.taxi-chat-header { flex: 0 0 auto; grid-template-columns: auto minmax(0, 1fr); }
+.taxi-chat-header h1 { overflow: hidden; font-size: 19px; text-overflow: ellipsis; white-space: nowrap; }
+.taxi-chat-messages { display: flex; min-height: 0; padding: 18px 22px; flex: 1; flex-direction: column; gap: 14px; overflow-y: auto; }
+.taxi-chat-notice { padding: 11px 13px; border-radius: 12px; color: #65716a; background: #e9eeeb; font-size: 11px; line-height: 1.5; text-align: center; }
+.taxi-chat-empty { display: flex; min-height: 220px; align-items: center; justify-content: center; flex-direction: column; gap: 7px; color: #949c97; font-size: 12px; }
+.taxi-chat-empty span { font-size: 30px; }
+.taxi-chat-empty strong { color: #536058; font-size: 15px; }
+.taxi-chat-row { display: flex; align-items: flex-start; flex-direction: column; gap: 5px; }
+.taxi-chat-row.is-mine { align-items: flex-end; }
+.taxi-chat-sender { color: #7f8983; font-size: 10px; }
+.taxi-chat-row > div { display: flex; max-width: 78%; align-items: flex-end; gap: 6px; }
+.taxi-chat-row.is-mine > div { flex-direction: row-reverse; }
+.taxi-chat-row p { margin: 0; padding: 11px 14px; border-radius: 4px 16px 16px; color: #273129; background: #fff; box-shadow: 0 3px 12px rgb(23 60 36 / 7%); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.taxi-chat-row.is-mine p { border-radius: 16px 4px 16px 16px; color: #fff; background: var(--app-green); }
+.taxi-chat-row time { flex: 0 0 auto; color: #9aa19d; font-size: 9px; }
+.taxi-chat-composer { flex: 0 0 auto; padding: 10px 16px max(10px, env(safe-area-inset-bottom)); border-top: 1px solid #e0e5e2; background: #fff; }
+.taxi-chat-composer > div { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.taxi-chat-composer input { min-width: 0; padding: 13px 16px; border: 1px solid #dce3df; border-radius: 999px; outline: 0; background: #f7f9f8; }
+.taxi-chat-composer input:focus { border-color: #58aa6a; }
+.taxi-chat-composer button { width: 44px; height: 44px; border: 0; border-radius: 50%; color: #fff; background: var(--app-green); cursor: pointer; }
+.taxi-chat-composer button:disabled { background: #cdd4d0; cursor: default; }
+.taxi-chat-composer .taxi-error { margin-bottom: 8px; }
+
+@media (max-width: 420px) and (hover: none), (max-width: 420px) and (pointer: coarse) {
+  .taxi-page-header { min-height: 82px; padding: 12px 14px; gap: 10px; }
+  .taxi-page-header > button:first-child { width: 38px; height: 38px; }
+  .taxi-page-header h1 { font-size: 21px; }
+  .taxi-create-button { padding: 10px 11px; font-size: 11px; }
+  .taxi-content, .taxi-create-form { padding: 16px 14px 30px; gap: 14px; }
+  .taxi-create-form input, .taxi-create-form select { min-height: 58px; }
+  .taxi-capacity-options button { min-height: 58px; }
+  .taxi-hero { padding: 16px; }
+  .taxi-hero > span { width: 44px; height: 44px; font-size: 22px; }
+  .taxi-hero strong { font-size: 14px; }
+  .taxi-party-card { padding: 17px; border-radius: 19px; }
+  .taxi-chat-messages { padding: 14px; }
+  .taxi-chat-row > div { max-width: 86%; }
+}

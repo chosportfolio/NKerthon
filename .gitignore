@@ -12,6 +12,21 @@ dist
 dist-ssr
 *.local
 server/data/*.db*
+server/data/backups/
+
+# Secrets (API 키 등) — 절대 커밋하지 않음
+.env
+.env.*
+!.env.example
+
+# Chatbot (Python): 실행에 필요한 검색 데이터만 커밋하고 원본 PDF·캐시·평가 임시 파일은 제외
+__pycache__/
+*.pyc
+chatbot/kku_data/files/yoram/*.pdf
+chatbot/kku_data/files/yoram/*.pages.json
+chatbot/kku_data/ablation/
+chatbot/eval/results/*.jsonl
+chatbot/eval/results/*.csv
 
 # Editor directories and files
 .vscode/*
